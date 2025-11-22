@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yearly Remaining Mortgage Balance Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+        .shadow-custom {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        .btn-primary {
+            transition: all 0.15s ease;
+        }
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
+        }
+        .input-style {
+            transition: border-color 0.15s ease;
+        }
+        .input-style:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div id="app" class="max-w-4xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 mb-2">Mortgage Balance Simulator</h1>
+            <p class="text-gray-500">Calculate the remaining principal balance year-by-year based on your fixed monthly payment.</p>
+        </header>
+
+        <div class="bg-white p-6 sm:p-8 rounded-xl shadow-custom border border-gray-100">
+
+            <!-- Input Form -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <!-- Loan Amount -->
+                <div>
+                    <label for="loanAmount" class="block text-sm font-medium text-gray-700 mb-1">Loan Principal</label>
+                    <input type="number" id="loanAmount" value="200000" class="input-style w-full border border-gray-300 rounded-lg p-3 focus:outline-none" placeholder="e.g., 200000" min="1" step="any">
+                </div>
+                <!-- Interest Rate -->
+                <div>
+                    <label for="interestRate" class="block text-sm font-medium text-gray-700 mb-1">Annual Interest Rate (%)</label>
+                    <input type="number" id="interestRate" value="4.5" class="input-style w-full border border-gray-300 rounded-lg p-3 focus:outline-none" placeholder="e.g., 4.5" min="0.01" step="0.01">
+                </div>
+                <!-- Loan Length -->
+                <div>
+                    <label for="loanLength" class="block text-sm font-medium text-gray-700 mb-1">Loan Length (Years)</label>
+                    <input type="number" id="loanLength" value="30" class="input-style w-full border border-gray-300 rounded-lg p-3 focus:outline-none" placeholder="e.g., 30" min="1" step="1">
+                </div>
+                <!-- Monthly Payment -->
+                <div>
+                    <label for="monthlyPayment" class="block text-sm font-medium text-gray-700 mb-1">Monthly Payment</label>
+                    <input type="number" id="monthlyPayment" value="1200" class="input-style w-full border border-gray-300 rounded-lg p-3 focus:outline-none" placeholder="e.g., 1200" min="1" step="any">
+                    <p class="text-xs text-gray-500 mt-1">This is the amount you plan to pay each month (includes principal and interest).</p>
+                </div>
+            </div>
+
+            <!-- Error Message and Button -->
+            <div id="errorMessage" class="text-red-600 mb-4 font-medium hidden p-3 bg-red-50 rounded-lg border border-red-200"></div>
+
+            <button onclick="calculateMortgage()" class="btn-primary w-full bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500 focus:ring-opacity-50">
+                Calculate Amortization
+            </button>
+        </div>
+
+        <!-- Results Display -->
+        <div id="resultsContainer" class="mt-10 hidden">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">Amortization Schedule</h2>
+            
+            <!-- Summary with 4 Columns (Responsive) -->
+            <div id="summary" class="bg-indigo-50 p-4 sm:p-6 rounded-lg mb-6 grid grid-cols-2 lg:grid-cols-4 gap-4 text-center">
+                <!-- Years to Pay Off -->
+                <div class="border-r sm:border-r-2 border-indigo-200 lg:border-r-2">
+                    <p class="text-lg font-semibold text-gray-600">Years to Pay Off</p>
+                    <p id="payoffYears" class="text-2xl font-extrabold text-indigo-700 mt-1"></p>
+                </div>
+                <!-- Interest After 5 Years (NEW) -->
+                <div class="border-r sm:border-r-2 border-indigo-200 lg:border-r-2">
+                    <p class="text-lg font-semibold text-gray-600">Interest after 5 Years</p>
+                    <p id="interestFiveYears" class="text-2xl font-extrabold text-indigo-700 mt-1"></p>
+                </div>
+                <!-- Total Payments -->
+                <div class="border-r sm:border-r-2 border-indigo-200 lg:border-r-2">
+                    <p class="text-lg font-semibold text-gray-600">Total Payments</p>
+                    <p id="totalPayments" class="text-2xl font-extrabold text-indigo-700 mt-1"></p>
+                </div>
+                <!-- Total Interest Paid -->
+                <div class="lg:border-r-0">
+                    <p class="text-lg font-semibold text-gray-600">Total Interest Paid</p>
+                    <p id="totalInterest" class="text-2xl font-extrabold text-indigo-700 mt-1"></p>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto bg-white rounded-xl shadow-custom">
+                <table id="resultsTable" class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Starting Balance</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ending Balance</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Interest Paid This Year</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Results injected here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="payoffMessage" class="mt-4 p-4 text-center text-sm font-medium text-indigo-600 bg-indigo-100 rounded-lg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Firebase Initialization Script -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Required global variables for Firebase setup
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+
+        // Initialize Firebase and Authentication
+        window.onload = async () => {
+            try {
+                if (Object.keys(firebaseConfig).length > 0) {
+                    app = initializeApp(firebaseConfig);
+                    db = getFirestore(app);
+                    setLogLevel('Debug'); // Enable logging for debugging
+                    auth = getAuth(app);
+
+                    // Sign in using the provided token or anonymously
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                        console.log("Firebase signed in with custom token.");
+                    } else {
+                        await signInAnonymously(auth);
+                        console.log("Firebase signed in anonymously.");
+                    }
+
+                    onAuthStateChanged(auth, (user) => {
+                        window.userId = user ? user.uid : null;
+                        console.log("Auth state changed. User ID:", window.userId);
+                    });
+                } else {
+                    console.warn("Firebase config not available. Running without database features.");
+                }
+                
+                // Set the calculation function globally accessible
+                window.calculateMortgage = calculateMortgage;
+                
+            } catch (error) {
+                console.error("Firebase setup failed:", error);
+            }
+        };
+    </script>
+
+    <!-- Calculator Logic Script -->
+    <script>
+        // Utility function to format numbers without currency or commas, to two decimal places
+        function formatNumber(amount) {
+            // Round to 2 decimal places and return as a string
+            return (Math.round(amount * 100) / 100).toFixed(2);
+        }
+
+        /**
+         * Core calculation logic: simulates amortization month-by-month
+         * Interest is calculated DAILY (compounding) based on the balance for the month.
+         */
+        function calculateRemainingBalance(principal, rate, monthlyPayment, termYears) {
+            let balance = principal;
+            const annualRate = rate / 100;
+            const DAILY_RATE = annualRate / 365; // Daily interest rate for compounding
+            // Standard days per month (non-leap year) for a fixed, repeatable calculation
+            const DAYS_IN_MONTHS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; 
+            const totalMonthsLimit = termYears * 12;
+            const results = [];
+            let totalInterestPaid = 0;
+            let overallMonthCount = 0;
+            let principalPaid = 0;
+            let interestAfterFiveYears = 0; // NEW: Variable to track interest after 5 years (60 months)
+            
+            // Temporary variables for yearly summary
+            let yearInterest = 0;
+            let yearStartingBalance = principal;
+            let currentYear = 1;
+
+            // Check for necessary payment to even cover interest (using average monthly rate for quick check)
+            if (monthlyPayment <= (principal * (annualRate / 12))) {
+                return {
+                    results: [],
+                    totalInterestPaid: 0,
+                    payoffMessage: "Your monthly payment is too low to cover the average monthly interest. The balance will increase.",
+                    payoffYears: 'N/A'
+                };
+            }
+
+            // Loop until balance is zero or we exceed the calculation limit
+            while (balance > 0 && overallMonthCount < totalMonthsLimit) {
+                // Determine the current month index (0-11) based on overall count
+                const monthIndex = overallMonthCount % 12;
+                const daysInMonth = DAYS_IN_MONTHS[monthIndex];
+                
+                // 1. Calculate interest for this month (Daily Compounding)
+                // Interest = Balance * Daily Rate * Days in Month
+                const interestForMonth = balance * DAILY_RATE * daysInMonth;
+                totalInterestPaid += interestForMonth;
+                yearInterest += interestForMonth;
+                
+                // 2. Calculate principal payment
+                principalPaid = monthlyPayment - interestForMonth;
+
+                // 3. Handle the final payment
+                if (principalPaid >= balance) {
+                    // The final payment pays off the remaining balance
+                    principalPaid = balance;
+                    balance = 0;
+                } else {
+                    // Apply regular principal reduction
+                    balance -= principalPaid;
+                }
+
+                overallMonthCount++;
+
+                // NEW: Check for 5-year interest tracking (Month 60)
+                if (overallMonthCount === 60) {
+                    interestAfterFiveYears = totalInterestPaid;
+                }
+
+                // 4. End of year logic (after 12 months or if loan is paid off)
+                if (monthIndex === 11 || balance === 0) {
+                    // Record the end-of-year data
+                    results.push({
+                        year: currentYear,
+                        startingBalance: yearStartingBalance,
+                        endingBalance: Math.max(0, balance),
+                        interestPaid: yearInterest
+                    });
+                    
+                    if (balance === 0) break; // Loan paid off
+
+                    // Reset for the next year
+                    currentYear++;
+                    yearInterest = 0;
+                    yearStartingBalance = balance;
+                }
+            }
+
+            // If the term is less than 5 years and interestAfterFiveYears is 0, set it to totalInterestPaid
+            if (termYears < 5 && interestAfterFiveYears === 0) {
+                interestAfterFiveYears = totalInterestPaid;
+            } else if (interestAfterFiveYears === 0 && overallMonthCount < 60) {
+                // If the loop finished before 60 months, but was more than 5 years long, something went wrong, 
+                // but for simplicity, we just set it to the current total interest.
+                interestAfterFiveYears = totalInterestPaid;
+            }
+
+            // Final message construction
+            let payoffMessage = "";
+            let payoffYears = overallMonthCount / 12;
+            // The total payments is the number of regular monthly payments made, multiplied by the payment amount
+            let totalPaymentsMade = overallMonthCount * monthlyPayment;
+            
+            if (balance > 0) {
+                payoffMessage = `Note: The loan was not fully paid off within the ${termYears} years. A balance of ${formatNumber(balance)} remains.`;
+                payoffYears = 'N/A (Balance Remaining)';
+                // Since the loop stopped at the limit, the total payments made is based on the limit
+                totalPaymentsMade = totalMonthsLimit * monthlyPayment;
+            } else {
+                payoffMessage = `The loan was paid off early in month ${overallMonthCount} of year ${Math.ceil(overallMonthCount / 12)}.`;
+                payoffYears = payoffYears.toFixed(1);
+                // Adjust total payments for the final, potentially smaller payment
+                totalPaymentsMade = totalPaymentsMade - (principalPaid - balance); 
+            }
+            
+            return {
+                results,
+                totalInterestPaid: totalInterestPaid,
+                interestAfterFiveYears: interestAfterFiveYears, // NEW: Return this value
+                payoffMessage: payoffMessage,
+                payoffYears: payoffYears,
+                totalPayments: totalPaymentsMade
+            };
+        }
+
+        function displayError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+            document.getElementById('resultsContainer').classList.add('hidden');
+        }
+
+        function calculateMortgage() {
+            // 1. Get input values
+            const principal = parseFloat(document.getElementById('loanAmount').value);
+            const rate = parseFloat(document.getElementById('interestRate').value);
+            const termYears = parseInt(document.getElementById('loanLength').value);
+            const monthlyPayment = parseFloat(document.getElementById('monthlyPayment').value);
+            
+            // Clear previous error and results
+            document.getElementById('errorMessage').classList.add('hidden');
+            document.getElementById('resultsContainer').classList.add('hidden');
+            document.getElementById('payoffMessage').classList.add('hidden');
+            document.getElementById('resultsTableBody').innerHTML = '';
+
+
+            // 2. Validation
+            if (isNaN(principal) || principal <= 0) return displayError("Please enter a valid Loan Principal.");
+            if (isNaN(rate) || rate <= 0) return displayError("Please enter a valid Annual Interest Rate.");
+            if (isNaN(termYears) || termYears <= 0) return displayError("Please enter a valid Loan Length in Years.");
+            if (isNaN(monthlyPayment) || monthlyPayment <= 0) return displayError("Please enter a valid Monthly Payment amount.");
+
+            // 3. Perform Calculation
+            const calculation = calculateRemainingBalance(principal, rate, monthlyPayment, termYears);
+            
+            if (calculation.payoffMessage && calculation.payoffMessage.includes('too low')) {
+                return displayError(calculation.payoffMessage);
+            }
+
+            // 4. Display Results
+            const tableBody = document.getElementById('resultsTableBody');
+            
+            calculation.results.forEach((data, index) => {
+                const row = tableBody.insertRow();
+                const isLastRow = index === calculation.results.length - 1;
+                
+                row.className = isLastRow ? 'bg-indigo-50 font-semibold' : 'hover:bg-gray-50';
+
+                row.insertCell(0).textContent = data.year;
+                row.insertCell(1).textContent = formatNumber(data.startingBalance);
+                row.insertCell(2).textContent = formatNumber(data.endingBalance);
+                row.insertCell(3).textContent = formatNumber(data.interestPaid);
+            });
+            
+            // 5. Update Summary
+            document.getElementById('payoffYears').textContent = calculation.payoffYears;
+            document.getElementById('interestFiveYears').textContent = formatNumber(calculation.interestAfterFiveYears); // NEW
+            document.getElementById('totalPayments').textContent = formatNumber(calculation.totalPayments);
+            document.getElementById('totalInterest').textContent = formatNumber(calculation.totalInterestPaid);
+            
+
+            const payoffMessageElement = document.getElementById('payoffMessage');
+            payoffMessageElement.textContent = calculation.payoffMessage;
+            payoffMessageElement.classList.remove('hidden');
+            
+            document.getElementById('resultsContainer').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
