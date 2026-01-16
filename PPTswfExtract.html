@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT/PPTX Flash Extractor</title>
+    <!-- Use a more robust CDN for libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cfb@1.2.2/dist/cfb.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; }
+        .drop-zone { border: 2px dashed #1e293b; transition: all 0.2s ease; }
+        .drop-zone.dragover { border-color: #38bdf8; background: rgba(56, 189, 248, 0.05); }
+        .swf-card:hover { border-color: rgba(56, 189, 248, 0.4); background-color: rgba(15, 23, 42, 0.8); }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center py-12 px-6">
+
+    <div class="max-w-3xl w-full">
+        <header class="mb-10 text-center md:text-left">
+            <h1 class="text-3xl font-extrabold text-white mb-2 italic">Boardworks <span class="text-sky-400 font-normal not-italic">Legacy Extractor</span></h1>
+            <p class="text-slate-400">Extract high-quality <b>.swf</b> assets from legacy (.ppt) and modern (.pptx) files.</p>
+        </header>
+
+        <div id="dropZone" class="drop-zone rounded-3xl p-16 text-center cursor-pointer mb-8 bg-slate-900/40 backdrop-blur-sm">
+            <div id="idleState">
+                <div class="text-sky-500 mb-6 flex justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                </div>
+                <p class="text-xl font-bold text-slate-100">Drop PowerPoint Presentation</p>
+                <p class="text-slate-500 text-sm mt-2 font-medium">Supports .ppt and .pptx formats</p>
+            </div>
+
+            <div id="loadingState" class="hidden">
+                <div class="relative w-16 h-16 mx-auto mb-6">
+                    <div class="absolute inset-0 rounded-full border-4 border-sky-500/20"></div>
+                    <div class="absolute inset-0 rounded-full border-4 border-t-sky-500 animate-spin"></div>
+                </div>
+                <p id="statusMsg" class="text-slate-200 font-bold text-lg">Processing...</p>
+                <p class="text-slate-500 text-sm mt-1 italic">Scanning binary records for Flash signatures</p>
+            </div>
+        </div>
+
+        <input type="file" id="fileInput" class="hidden" accept=".ppt,.pptx">
+
+        <div id="resultsArea" class="hidden">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Extracted Assets</h2>
+                <span id="fileCount" class="bg-sky-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full">0 FILES</span>
+            </div>
+            <div id="assetList" class="grid grid-cols-1 gap-3"></div>
+        </div>
+
+        <div id="errorArea" class="hidden p-5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm mt-4 font-medium"></div>
+        
+        <div class="mt-12 p-6 rounded-2xl bg-slate-900/20 border border-slate-800/50">
+            <h3 class="text-sm font-bold text-slate-300 mb-2">Instructions</h3>
+            <ul class="text-xs text-slate-500 space-y-2 list-disc pl-4">
+                <li>Legacy <b>.ppt</b> files use OLE binary storage. We scan every internal stream for Flash headers.</li>
+                <li>Flash signatures detected: <b>FWS</b> (standard), <b>CWS</b> (compressed), <b>ZWS</b> (LZMA).</li>
+                <li>Some extracted files might need the <b>.swf</b> extension added manually if not detected.</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const idleState = document.getElementById('idleState');
+        const loadingState = document.getElementById('loadingState');
+        const resultsArea = document.getElementById('resultsArea');
+        const assetList = document.getElementById('assetList');
+        const errorArea = document.getElementById('errorArea');
+        const statusMsg = document.getElementById('statusMsg');
+
+        // Check if library loaded
+        window.onload = () => {
+            if (typeof CFB === 'undefined') {
+                showError("The CFB library failed to load. Please check your internet connection.");
+            }
+        };
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+        });
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        });
+
+        async function handleFile(file) {
+            if (typeof CFB === 'undefined') {
+                showError("Library not loaded. Please refresh the page.");
+                return;
+            }
+
+            errorArea.classList.add('hidden');
+            assetList.innerHTML = '';
+            idleState.classList.add('hidden');
+            loadingState.classList.remove('hidden');
+            resultsArea.classList.add('hidden');
+
+            const isOldFormat = file.name.toLowerCase().endsWith('.ppt');
+            statusMsg.textContent = isOldFormat ? "Parsing OLE Binary..." : "Scanning PPTX Package...";
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                let swfFiles = [];
+
+                if (isOldFormat) {
+                    const cfb = CFB.read(new Uint8Array(arrayBuffer), { type: 'array' });
+                    // Iterate through every stream in the OLE container
+                    for (const path of cfb.FullPaths) {
+                        const entry = CFB.find(cfb, path);
+                        if (entry && entry.content && entry.content.length > 8) {
+                            const found = scanBufferForFlash(entry.content, path);
+                            swfFiles = [...swfFiles, ...found];
+                        }
+                    }
+                } else {
+                    const zip = new JSZip();
+                    const contents = await zip.loadAsync(arrayBuffer);
+                    for (const [path, zipEntry] of Object.entries(contents.files)) {
+                        if (zipEntry.dir) continue;
+                        const buffer = await zipEntry.async("uint8array");
+                        const found = scanBufferForFlash(buffer, path);
+                        swfFiles = [...swfFiles, ...found];
+                    }
+                }
+
+                // Remove duplicates based on content similarity
+                const uniqueSwfs = deduplicate(swfFiles);
+                displayResults(uniqueSwfs);
+            } catch (err) {
+                showError("Extraction failed: " + err.message);
+                console.error(err);
+            } finally {
+                loadingState.classList.add('hidden');
+                idleState.classList.remove('hidden');
+            }
+        }
+
+        function scanBufferForFlash(uint8, path) {
+            const found = [];
+            // We search the entire buffer because Flash can be embedded inside OLE overhead
+            // Signatures: FWS (70, 87, 83), CWS (67, 87, 83), ZWS (90, 87, 83)
+            for (let i = 0; i < uint8.length - 8; i++) {
+                const b1 = uint8[i];
+                const b2 = uint8[i+1];
+                const b3 = uint8[i+2];
+
+                if ((b1 === 70 || b1 === 67 || b1 === 90) && b2 === 87 && b3 === 83) {
+                    // Flash files store their length in bytes 4-7 (little endian)
+                    // This helps us extract exactly the right amount of data
+                    const length = uint8[i+4] | (uint8[i+5] << 8) | (uint8[i+6] << 16) | (uint8[i+7] << 24);
+                    
+                    // Sanity check on length: if it's too huge or zero, skip
+                    if (length > 0 && length < 500 * 1024 * 1024) { 
+                        const data = uint8.slice(i, i + length);
+                        found.push({
+                            name: path.split('/').pop().replace(/[^\w.]/g, '_'),
+                            data: data,
+                            path: path
+                        });
+                        // Skip ahead past this file to avoid finding sub-signatures
+                        i += 8; 
+                    }
+                }
+            }
+            return found;
+        }
+
+        function deduplicate(files) {
+            const unique = [];
+            const seenSize = new Set();
+            for (const f of files) {
+                // Heuristic: same size + same 10th byte usually means same file in PPT world
+                const key = `${f.data.length}_${f.data[10]}`;
+                if (!seenSize.has(key)) {
+                    seenSize.add(key);
+                    unique.push(f);
+                }
+            }
+            return unique;
+        }
+
+        function displayResults(files) {
+            if (files.length === 0) {
+                showError("No Flash assets found. They might be stored as linked external files rather than embedded.");
+                return;
+            }
+
+            resultsArea.classList.remove('hidden');
+            document.getElementById('fileCount').textContent = `${files.length} ASSETS`;
+
+            files.forEach((file, index) => {
+                const card = document.createElement('div');
+                card.className = "swf-card bg-slate-900/60 border border-slate-800 p-5 rounded-2xl flex justify-between items-center transition-all group";
+                
+                const sizeKB = (file.data.length / 1024).toFixed(1);
+                const displayName = file.name.toLowerCase().endsWith('.swf') ? file.name : `${file.name}_${index+1}.swf`;
+
+                card.innerHTML = `
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14.5 2 14.5 7.5 20 7.5"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-sm font-bold text-slate-100 group-hover:text-sky-400 transition-colors">${displayName}</p>
+                            <p class="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">${sizeKB} KB • STREAM EXTRACTED</p>
+                        </div>
+                    </div>
+                    <button class="bg-white text-slate-950 px-4 py-2 rounded-xl text-xs font-black hover:bg-sky-400 transition-colors shadow-lg shadow-white/5">
+                        DOWNLOAD
+                    </button>
+                `;
+
+                card.querySelector('button').onclick = () => {
+                    const blob = new Blob([file.data], { type: 'application/x-shockwave-flash' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = displayName;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                };
+
+                assetList.appendChild(card);
+            });
+        }
+
+        function showError(msg) {
+            errorArea.textContent = msg;
+            errorArea.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
