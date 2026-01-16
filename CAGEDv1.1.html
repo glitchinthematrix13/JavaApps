@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CAGED Guitar Pro</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1e1e1e;
+            --text: #e0e0e0;
+            --accent: #f39c12;
+            --muted: #444;
+        }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 15px;
+            margin: 0;
+        }
+        .container { width: 100%; max-width: 450px; }
+        .controls {
+            background: var(--card);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        label { font-size: 0.8rem; color: #888; grid-column: span 2; }
+        select {
+            width: 100%;
+            padding: 12px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        .display-card {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .chord-name { font-size: 2rem; font-weight: 800; margin: 0; color: var(--accent); }
+        .shape-badge {
+            display: inline-block;
+            background: var(--accent);
+            color: black;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .fretboard {
+            display: flex;
+            justify-content: space-between;
+            background: #2c1e14;
+            padding: 20px 10px;
+            margin: 25px 0;
+            border-radius: 8px;
+            border-left: 8px solid #555; /* The Nut */
+        }
+        .string-lane {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+        .note {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        .active { background: white; color: black; font-weight: bold; box-shadow: 0 0 15px rgba(255,255,255,0.2); }
+        .open { border: 2px solid var(--accent); color: var(--accent); }
+        .muted { color: #555; border: 1px dashed #555; }
+        
+        .fret-val { font-size: 1.1rem; }
+        .finger-val {
+            font-size: 0.7rem;
+            position: absolute;
+            bottom: -18px;
+            color: #aaa;
+        }
+        .string-label { margin-top: 25px; color: #666; font-weight: bold; font-size: 0.8rem; }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 20px 0;
+            accent-color: var(--accent);
+        }
+        .pos-indicator { font-family: monospace; color: #888; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="controls">
+            <label>CHORD CONFIG</label>
+            <select id="rootNote">
+                <option value="C">C</option><option value="C#">C#</option>
+                <option value="D">D</option><option value="Eb">Eb</option>
+                <option value="E">E</option><option value="F">F</option>
+                <option value="F#">F#</option><option value="G">G</option>
+                <option value="Ab">Ab</option><option value="A">A</option>
+                <option value="Bb">Bb</option><option value="B">B</option>
+            </select>
+            <select id="quality">
+                <option value="major">Major</option>
+                <option value="minor">Minor</option>
+            </select>
+        </div>
+
+        <div class="display-card">
+            <p id="chordTitle" class="chord-name">C Major</p>
+            <div id="shapeLetter" class="shape-badge">C Shape</div>
+
+            <div class="fretboard" id="fretboard"></div>
+
+            <p class="pos-indicator">Slide to shift position (CAGED cycle)</p>
+            <input type="range" id="fretSlider" min="0" max="12" value="0">
+            <div id="fretLabel" style="font-weight: bold;">Fret: 0</div>
+        </div>
+    </div>
+
+    <script>
+        const cagedOrder = ["C", "A", "G", "E", "D"];
+        const stringNames = ['E', 'A', 'D', 'G', 'B', 'e'];
+
+        // Fingerings: f = fret relative to shape start, i = finger (1-4)
+        const data = {
+            major: {
+                C: [{f:null},{f:3,i:3},{f:2,i:2},{f:0},{f:1,i:1},{f:0}],
+                A: [{f:null},{f:0},{f:2,i:1},{f:2,i:2},{f:2,i:3},{f:0}],
+                G: [{f:3,i:3},{f:2,i:2},{f:0},{f:0},{f:0},{f:3,i:4}],
+                E: [{f:0},{f:2,i:2},{f:2,i:3},{f:1,i:1},{f:0},{f:0}],
+                D: [{f:null},{f:null},{f:0},{f:2,i:1},{f:3,i:3},{f:2,i:2}]
+            },
+            minor: {
+                C: [{f:null},{f:3,i:3},{f:1,i:1},{f:0},{f:1,i:1},{f:null}],
+                A: [{f:null},{f:0},{f:2,i:2},{f:2,i:3},{f:1,i:1},{f:0}],
+                G: [{f:3,i:3},{f:1,i:1},{f:0},{f:0},{f:3,i:4},{f:3,i:4}],
+                E: [{f:0},{f:2,i:2},{f:2,i:3},{f:0},{f:0},{f:0}],
+                D: [{f:null},{f:null},{f:0},{f:2,i:2},{f:3,i:3},{f:1,i:1}]
+            }
+        };
+
+        const rootEl = document.getElementById('rootNote');
+        const qualEl = document.getElementById('quality');
+        const sliderEl = document.getElementById('fretSlider');
+        const fretboardEl = document.getElementById('fretboard');
+
+        function render() {
+            const root = rootEl.value;
+            const qual = qualEl.value;
+            const fretBase = parseInt(sliderEl.value);
+            
+            // Determine shape based on position
+            const shapeIdx = Math.floor((fretBase % 12) / 2.5); 
+            const shape = cagedOrder[shapeIdx % 5];
+            
+            document.getElementById('chordTitle').innerText = `${root} ${qual.charAt(0).toUpperCase() + qual.slice(1)}`;
+            document.getElementById('shapeLetter').innerText = `${shape} Shape`;
+            document.getElementById('fretLabel').innerText = `Shape Start Fret: ${fretBase}`;
+
+            const chordData = data[qual][shape];
+            fretboardEl.innerHTML = '';
+
+            chordData.forEach((note, idx) => {
+                const lane = document.createElement('div');
+                lane.className = 'string-lane';
+
+                const circle = document.createElement('div');
+                if (note.f === null) {
+                    circle.className = 'note muted';
+                    circle.innerHTML = '<span class="fret-val">X</span>';
+                } else {
+                    const actualFret = note.f + fretBase;
+                    const isOpen = actualFret === 0;
+                    circle.className = `note ${isOpen ? 'open' : 'active'}`;
+                    
+                    // Show "O" for open, or the fret number
+                    circle.innerHTML = `<span class="fret-val">${isOpen ? 'O' : actualFret}</span>`;
+                    
+                    // Add finger label if it's not an open string
+                    if (note.i && !isOpen) {
+                        circle.innerHTML += `<span class="finger-val">T:${note.i}</span>`;
+                    }
+                }
+
+                const label = document.createElement('div');
+                label.className = 'string-label';
+                label.innerText = stringNames[idx];
+
+                lane.appendChild(circle);
+                lane.appendChild(label);
+                fretboardEl.appendChild(lane);
+            });
+        }
+
+        [rootEl, qualEl, sliderEl].forEach(el => el.addEventListener('input', render));
+        render();
+    </script>
+</body>
+</html>
