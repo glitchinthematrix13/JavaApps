@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AMSTRAD PCW 8256 | BLOCK COMMAND</title>
+    <style>
+        body {
+            background-color: #080808;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 8px #33ff33;
+            overflow: hidden;
+        }
+        .no-cursor { cursor: none; }
+        #game-container { position: relative; border: 4px solid #1a551a; }
+        #game-container::after {
+            content: " ";
+            position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px; pointer-events: none; z-index: 10;
+        }
+        canvas { background-color: #000; display: block; }
+        #ui {
+            width: 400px; display: flex; justify-content: space-between;
+            padding: 10px; border: 1px solid #1a551a; border-bottom: none;
+            background: #051105; font-weight: bold;
+        }
+        .overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 15, 0, 0.98); border: 2px solid #33ff33;
+            padding: 20px; text-align: center; z-index: 20; min-width: 300px;
+        }
+        input { 
+            background: #000; border: 1px solid #33ff33; color: #33ff33; 
+            font-family: 'Courier New'; font-size: 20px; text-align: center;
+            outline: none; width: 180px; text-transform: uppercase;
+            box-shadow: 0 0 10px #33ff33; margin: 10px 0;
+        }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 14px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="no-cursor">
+    <div id="ui">
+        <span>PCW 8256 - BLOCKS</span>
+        <span>SCORE: <span id="score">0000</span></span>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="300" height="600"></canvas>
+        <div id="overlay" class="overlay hidden">
+            <h2 id="status-text">SYSTEM HALT</h2>
+            <div id="high-score-input" class="hidden">
+                <p>NEW RECORD</p>
+                <input type="text" id="player-name" maxlength="8" autocomplete="off">
+                <p>[ENTER] TO SAVE</p>
+            </div>
+            <table id="score-table"></table>
+            <p>[R] REBOOT</p>
+        </div>
+        <div id="pause-overlay" class="overlay hidden">
+            <h2>PAUSED</h2>
+            <p>[P] RESUME</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const overlay = document.getElementById("overlay");
+        const pauseOverlay = document.getElementById("pause-overlay");
+        const nameInput = document.getElementById("player-name");
+
+        const ROWS = 20; const COLS = 10; const BLOCK_SIZE = 30;
+        let board, score, currentPiece, gameActive, isPaused, enteringName, dropCounter, dropInterval;
+
+        const SHAPES = [
+            [[1, 1, 1, 1]], // I
+            [[1, 1], [1, 1]], // O
+            [[0, 1, 0], [1, 1, 1]], // T
+            [[1, 0, 0], [1, 1, 1]], // L
+            [[0, 0, 1], [1, 1, 1]], // J
+            [[0, 1, 1], [1, 1, 0]], // S
+            [[1, 1, 0], [0, 1, 1]]  // Z
+        ];
+
+        function init() {
+            board = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+            score = 0; gameActive = true; isPaused = false; enteringName = false;
+            dropCounter = 0; dropInterval = 1000;
+            scoreElement.innerText = "0000";
+            overlay.classList.add("hidden");
+            pauseOverlay.classList.add("hidden");
+            document.getElementById("high-score-input").classList.add("hidden");
+            spawnPiece();
+            requestAnimationFrame(update);
+        }
+
+        function spawnPiece() {
+            const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+            currentPiece = { shape, x: Math.floor(COLS / 2) - 1, y: 0 };
+            if (collide()) gameOver();
+        }
+
+        function collide() {
+            return currentPiece.shape.some((row, dy) => 
+                row.some((value, dx) => 
+                    value !== 0 && (board[currentPiece.y + dy]?.[currentPiece.x + dx] !== 0)
+                )
+            );
+        }
+
+        function rotate(matrix) {
+            return matrix[0].map((_, i) => matrix.map(row => row[i]).reverse());
+        }
+
+        function merge() {
+            currentPiece.shape.forEach((row, dy) => {
+                row.forEach((value, dx) => {
+                    if (value) board[currentPiece.y + dy][currentPiece.x + dx] = 1;
+                });
+            });
+            clearLines();
+            spawnPiece();
+        }
+
+        function clearLines() {
+            let linesCleared = 0;
+            for (let y = ROWS - 1; y >= 0; y--) {
+                if (board[y].every(value => value !== 0)) {
+                    board.splice(y, 1);
+                    board.unshift(Array(COLS).fill(0));
+                    linesCleared++;
+                    y++;
+                }
+            }
+            if (linesCleared > 0) {
+                score += [0, 100, 300, 500, 800][linesCleared];
+                scoreElement.innerText = score.toString().padStart(4, '0');
+                dropInterval = Math.max(100, 1000 - (score / 2)); // Speed up
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.shadowBlur = 8; ctx.shadowColor = "#33ff33";
+            ctx.strokeStyle = "#1a551a";
+
+            // Draw Board
+            board.forEach((row, y) => row.forEach((value, x) => {
+                if (value) drawBlock(x, y);
+            }));
+
+            // Draw Piece
+            if (currentPiece) {
+                currentPiece.shape.forEach((row, dy) => row.forEach((value, dx) => {
+                    if (value) drawBlock(currentPiece.x + dx, currentPiece.y + dy);
+                }));
+            }
+        }
+
+        function drawBlock(x, y) {
+            ctx.fillStyle = "#33ff33";
+            ctx.fillRect(x * BLOCK_SIZE + 1, y * BLOCK_SIZE + 1, BLOCK_SIZE - 2, BLOCK_SIZE - 2);
+        }
+
+        let lastTime = 0;
+        function update(time = 0) {
+            if (!gameActive || isPaused) return;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+            dropCounter += deltaTime;
+            if (dropCounter > dropInterval) {
+                currentPiece.y++;
+                if (collide()) { currentPiece.y--; merge(); }
+                dropCounter = 0;
+            }
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function gameOver() {
+            gameActive = false;
+            overlay.classList.remove("hidden");
+            const highScores = JSON.parse(localStorage.getItem("pcw_tetris_scores")) || [];
+            if (score > (highScores[9]?.score || 0)) {
+                enteringName = true;
+                document.getElementById("high-score-input").classList.remove("hidden");
+                nameInput.focus();
+            }
+            displayScores();
+        }
+
+        function displayScores() {
+            const highScores = JSON.parse(localStorage.getItem("pcw_tetris_scores")) || [];
+            document.getElementById("score-table").innerHTML = `<tr><th>RANK</th><th>NAME</th><th>SCORE</th></tr>` + 
+                highScores.map((s, i) => `<tr><td>${i+1}</td><td>${s.name}</td><td>${s.score}</td></tr>`).join('');
+        }
+
+        window.addEventListener("keydown", e => {
+            if (enteringName) {
+                if (e.key === 'Enter') {
+                    let highScores = JSON.parse(localStorage.getItem("pcw_tetris_scores")) || [];
+                    highScores.push({ name: nameInput.value.toUpperCase() || "ANON", score });
+                    highScores.sort((a, b) => b.score - a.score);
+                    localStorage.setItem("pcw_tetris_scores", JSON.stringify(highScores.slice(0, 10)));
+                    enteringName = false; location.reload();
+                }
+                return;
+            }
+            if (e.key.toLowerCase() === 'p') { isPaused = !isPaused; pauseOverlay.classList.toggle("hidden", !isPaused); if (!isPaused) update(); }
+            if (e.key.toLowerCase() === 'r') location.reload();
+            if (!gameActive || isPaused) return;
+
+            if (e.keyCode === 37) { currentPiece.x--; if (collide()) currentPiece.x++; } // Left
+            if (e.keyCode === 39) { currentPiece.x++; if (collide()) currentPiece.x--; } // Right
+            if (e.keyCode === 40) { currentPiece.y++; if (collide()) { currentPiece.y--; merge(); } } // Down
+            if (e.keyCode === 38) { // Rotate
+                const oldShape = currentPiece.shape;
+                currentPiece.shape = rotate(currentPiece.shape);
+                if (collide()) currentPiece.shape = oldShape;
+            }
+        });
+
+        // Mouse Auto-Hide
+        let mouseTimer;
+        window.addEventListener('mousemove', () => {
+            document.body.classList.remove('no-cursor');
+            clearTimeout(mouseTimer);
+            mouseTimer = setTimeout(() => document.body.classList.add('no-cursor'), 2000);
+        });
+
+        init();
+    </script>
+</body>
+</html>

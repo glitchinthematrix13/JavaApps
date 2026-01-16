@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro-Focus Speed Reader</title>
+    <style>
+        :root {
+            --bg-color: #0a0a0a;
+            --text-color: #e0e0e0;
+            --accent-color: #ff3333;
+            --panel-bg: #1a1a1a;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #reader-container {
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 50px;
+        }
+
+        /* The Display Area */
+        #word-display {
+            font-size: 64px;
+            font-weight: 600;
+            height: 100px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            letter-spacing: -1px;
+            position: relative;
+        }
+
+        /* The Focal Point (Red Letter) */
+        .focal {
+            color: var(--accent-color);
+        }
+
+        /* Guides to help eyes stay centered */
+        .guide {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 15px;
+            background-color: #333;
+        }
+        .guide-top { top: -20px; }
+        .guide-bottom { bottom: -20px; }
+
+        /* Controls Area */
+        #controls {
+            background: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            background: #000;
+            color: #bbb;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            resize: none;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+
+        #play-btn { background-color: #33ff33; color: #000; }
+        #play-btn:hover { background-color: #2be02b; }
+        #reset-btn { background-color: #444; color: #fff; }
+
+        select {
+            background: #333;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: none;
+        }
+
+        #progress-bar {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            margin-top: 15px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        #progress-fill {
+            height: 100%;
+            background: var(--accent-color);
+            width: 0%;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="reader-container">
+        <div id="word-display">
+            <div class="guide guide-top"></div>
+            <div id="word-target">READY</div>
+            <div class="guide guide-bottom"></div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <textarea id="input-text" placeholder="Paste your text here..."></textarea>
+        
+        <div class="setting-row">
+            <label>Speed (WPM):</label>
+            <select id="wpm-select">
+                <option value="200">200 (Normal)</option>
+                <option value="300" selected>300 (Fast)</option>
+                <option value="400">400 (Turbo)</option>
+                <option value="500">500 (Expert)</option>
+                <option value="700">700 (Elite)</option>
+                <option value="1000">1000 (Insane)</option>
+            </select>
+        </div>
+
+        <div class="btn-group">
+            <button id="play-btn">START</button>
+            <button id="reset-btn">RESET</button>
+        </div>
+
+        <div id="progress-bar">
+            <div id="progress-fill"></div>
+        </div>
+    </div>
+
+    <script>
+        const wordTarget = document.getElementById('word-target');
+        const playBtn = document.getElementById('play-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const wpmSelect = document.getElementById('wpm-select');
+        const inputText = document.getElementById('input-text');
+        const progressFill = document.getElementById('progress-fill');
+
+        let words = [];
+        let currentIndex = 0;
+        let isPlaying = false;
+        let timer = null;
+
+        function processText() {
+            const text = inputText.value.trim();
+            words = text.split(/\s+/).filter(w => w.length > 0);
+        }
+
+        function getOrpIndex(word) {
+            // Optimal Recognition Point is usually at 25-35% of the word length
+            if (word.length <= 1) return 0;
+            if (word.length <= 5) return 1;
+            if (word.length <= 9) return 2;
+            if (word.length <= 13) return 3;
+            return 4;
+        }
+
+        function formatWord(word) {
+            if (!word) return "";
+            const orp = getOrpIndex(word);
+            const prefix = word.substring(0, orp);
+            const focal = word.substring(orp, orp + 1);
+            const suffix = word.substring(orp + 1);
+            
+            return `<span>${prefix}</span><span class="focal">${focal}</span><span>${suffix}</span>`;
+        }
+
+        function showNextWord() {
+            if (currentIndex >= words.length) {
+                stop();
+                return;
+            }
+
+            const word = words[currentIndex];
+            wordTarget.innerHTML = formatWord(word);
+            
+            // Progress
+            const progress = ((currentIndex + 1) / words.length) * 100;
+            progressFill.style.width = `${progress}%`;
+
+            currentIndex++;
+
+            // Variable timing: add slight delay for punctuation
+            let delay = 60000 / parseInt(wpmSelect.value);
+            if (word.includes('.') || word.includes('!') || word.includes('?')) delay *= 2;
+            if (word.includes(',')) delay *= 1.5;
+
+            timer = setTimeout(showNextWord, delay);
+        }
+
+        function play() {
+            if (words.length === 0) processText();
+            if (words.length === 0) return;
+            
+            isPlaying = true;
+            playBtn.textContent = "STOP";
+            playBtn.style.backgroundColor = "#ff3333";
+            showNextWord();
+        }
+
+        function stop() {
+            isPlaying = false;
+            playBtn.textContent = "START";
+            playBtn.style.backgroundColor = "#33ff33";
+            clearTimeout(timer);
+        }
+
+        function reset() {
+            stop();
+            currentIndex = 0;
+            progressFill.style.width = '0%';
+            wordTarget.innerHTML = "READY";
+            processText();
+        }
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) stop();
+            else play();
+        });
+
+        resetBtn.addEventListener('click', reset);
+        
+        // Auto-reset when text changes
+        inputText.addEventListener('input', () => {
+            stop();
+            currentIndex = 0;
+            processText();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AMSTRAD PCW 8256 | PADDLE COMMAND</title>
+    <style>
+        body {
+            background-color: #080808;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 8px #33ff33;
+            overflow: hidden;
+        }
+        .no-cursor { cursor: none; }
+        #game-container { position: relative; border: 4px solid #1a551a; }
+        #game-container::after {
+            content: " ";
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        canvas { background-color: #000; display: block; }
+        #ui {
+            width: 800px;
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            border: 1px solid #1a551a;
+            border-bottom: none;
+            background: #051105;
+            font-weight: bold;
+        }
+        .overlay {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 15, 0, 0.98);
+            border: 2px solid #33ff33;
+            padding: 20px;
+            text-align: center;
+            z-index: 20;
+            min-width: 350px;
+            box-shadow: 0 0 15px #1a551a;
+        }
+        table { width: 100%; margin-top: 10px; border-collapse: collapse; }
+        th { border-bottom: 1px solid #33ff33; padding-bottom: 5px; }
+        input { 
+            background: #000; border: 1px solid #33ff33; color: #33ff33; 
+            font-family: 'Courier New'; font-size: 24px; text-align: center;
+            outline: none; width: 200px; text-transform: uppercase;
+            box-shadow: 0 0 10px #33ff33; text-shadow: 0 0 8px #33ff33; margin: 10px 0;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="no-cursor">
+    <div id="ui">
+        <span>PCW 8256 - PADDLE COMMAND</span>
+        <span>SCORE: <span id="score">0000</span></span>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="overlay" class="overlay hidden">
+            <h2 id="status-text">SIGNAL LOST</h2>
+            <div id="high-score-input" class="hidden">
+                <p>NEW RECORD DETECTED</p>
+                <input type="text" id="player-name" maxlength="8" autocomplete="off">
+                <p>PRESS [ENTER] TO COMMIT</p>
+            </div>
+            <div id="leaderboard">
+                <p>--- TOP 10 PILOTS ---</p>
+                <table id="score-table"></table>
+            </div>
+            <p style="margin-top:20px;">[R] RESTART SYSTEM</p>
+        </div>
+
+        <div id="pause-overlay" class="overlay hidden">
+            <h2>SYSTEM PAUSED</h2>
+            <p>PRESS [P] TO RESUME</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const overlay = document.getElementById("overlay");
+        const pauseOverlay = document.getElementById("pause-overlay");
+        const scoreTable = document.getElementById("score-table");
+        const nameInput = document.getElementById("player-name");
+
+        // Game Constants
+        const paddleWidth = 15;
+        const paddleHeight = 80;
+        const ballSize = 12;
+        
+        // Game State
+        let score, playerY, aiY, ballX, ballY, ballDX, ballDY, ballSpeed;
+        let gameActive, isPaused, enteringName;
+        let upPressed = false, downPressed = false;
+
+        // Mouse Auto-Hide
+        let mouseTimer;
+        window.addEventListener('mousemove', () => {
+            document.body.classList.remove('no-cursor');
+            clearTimeout(mouseTimer);
+            mouseTimer = setTimeout(() => document.body.classList.add('no-cursor'), 2000);
+        });
+
+        function init() {
+            score = 0;
+            playerY = (canvas.height - paddleHeight) / 2;
+            aiY = (canvas.height - paddleHeight) / 2;
+            resetBall();
+            gameActive = true;
+            isPaused = false;
+            enteringName = false;
+            scoreElement.innerHTML = "0000";
+            overlay.classList.add("hidden");
+            pauseOverlay.classList.add("hidden");
+            document.getElementById("high-score-input").classList.add("hidden");
+            requestAnimationFrame(update);
+        }
+
+        function resetBall() {
+            ballX = canvas.width / 2;
+            ballY = canvas.height / 2;
+            ballSpeed = 5;
+            ballDX = Math.random() > 0.5 ? ballSpeed : -ballSpeed;
+            ballDY = (Math.random() * 2 - 1) * ballSpeed;
+        }
+
+        function update() {
+            if (!gameActive || isPaused) return;
+
+            // Player Movement
+            if (upPressed && playerY > 0) playerY -= 7;
+            if (downPressed && playerY < canvas.height - paddleHeight) playerY += 7;
+
+            // Simple AI Movement
+            let aiCenter = aiY + paddleHeight / 2;
+            if (aiCenter < ballY - 10) aiY += 4.5;
+            else if (aiCenter > ballY + 10) aiY -= 4.5;
+
+            // Ball Physics
+            ballX += ballDX;
+            ballY += ballDY;
+
+            // Wall Bounce (Top/Bottom)
+            if (ballY <= 0 || ballY >= canvas.height - ballSize) ballDY *= -1;
+
+            // Paddle Collision (Player)
+            if (ballX <= paddleWidth && ballY + ballSize >= playerY && ballY <= playerY + paddleHeight) {
+                ballDX = Math.abs(ballDX) + 0.2; // Increase speed
+                ballDY += (Math.random() - 0.5) * 2;
+                score += 10;
+                scoreElement.innerHTML = score.toString().padStart(4, '0');
+            }
+
+            // Paddle Collision (AI)
+            if (ballX >= canvas.width - paddleWidth - ballSize && ballY + ballSize >= aiY && ballY <= aiY + paddleHeight) {
+                ballDX = -Math.abs(ballDX) - 0.2;
+            }
+
+            // Scoring
+            if (ballX < 0) gameOver(); // Player missed
+            if (ballX > canvas.width) resetBall(); // AI missed (continue game)
+
+            draw();
+            requestAnimationFrame(update);
+        }
+
+        function draw() {
+            ctx.fillStyle = "black";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#33ff33";
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = "#33ff33";
+
+            // Draw Paddles
+            ctx.fillRect(0, playerY, paddleWidth, paddleHeight);
+            ctx.fillRect(canvas.width - paddleWidth, aiY, paddleWidth, paddleHeight);
+
+            // Draw Ball
+            ctx.fillRect(ballX, ballY, ballSize, ballSize);
+
+            // Center Line
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = "#1a551a";
+            ctx.stroke();
+        }
+
+        function gameOver() {
+            gameActive = false;
+            overlay.classList.remove("hidden");
+            const highScores = JSON.parse(localStorage.getItem("pcw_pong_scores")) || [];
+            const isHighScore = highScores.length < 10 || score > (highScores[highScores.length - 1]?.score || 0);
+
+            if (isHighScore && score > 0) {
+                enteringName = true;
+                document.getElementById("high-score-input").classList.remove("hidden");
+                nameInput.value = "";
+                setTimeout(() => nameInput.focus(), 10);
+            }
+            displayScores();
+        }
+
+        function saveScore() {
+            const name = nameInput.value.toUpperCase() || "ANON";
+            let highScores = JSON.parse(localStorage.getItem("pcw_pong_scores")) || [];
+            highScores.push({name, score});
+            highScores.sort((a, b) => b.score - a.score);
+            highScores = highScores.slice(0, 10);
+            localStorage.setItem("pcw_pong_scores", JSON.stringify(highScores));
+            document.getElementById("high-score-input").classList.add("hidden");
+            enteringName = false;
+            displayScores();
+        }
+
+        function displayScores() {
+            const highScores = JSON.parse(localStorage.getItem("pcw_pong_scores")) || [];
+            scoreTable.innerHTML = `<tr><th>RANK</th><th>NAME</th><th>SCORE</th></tr>` + 
+                highScores.map((s, i) => `<tr><td>${i+1}</td><td>${s.name}</td><td>${s.score}</td></tr>`).join('');
+        }
+
+        window.addEventListener("keydown", e => {
+            if (enteringName) {
+                if (e.key === 'Enter') saveScore();
+                return;
+            }
+            if (e.key.toLowerCase() === 'p') {
+                isPaused = !isPaused;
+                pauseOverlay.classList.toggle("hidden", !isPaused);
+                if (!isPaused) requestAnimationFrame(update);
+            }
+            if (e.key.toLowerCase() === 'r') init();
+            
+            if (e.keyCode === 38) upPressed = true;
+            if (e.keyCode === 40) downPressed = true;
+        });
+
+        window.addEventListener("keyup", e => {
+            if (e.keyCode === 38) upPressed = false;
+            if (e.keyCode === 40) downPressed = false;
+        });
+
+        init();
+    </script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AMSTRAD PCW 8256 | RABBIT CHASE v5</title>
+    <style>
+        body {
+            background-color: #080808;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            text-shadow: 0 0 8px #33ff33;
+            overflow: hidden;
+        }
+        .no-cursor { cursor: none; }
+        #game-container { position: relative; border: 4px solid #1a551a; }
+        #game-container::after {
+            content: " ";
+            position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            background-size: 100% 4px; pointer-events: none; z-index: 10;
+        }
+        canvas { background-color: #000; display: block; border: 1px solid #1a551a; }
+        #ui {
+            width: 800px; display: flex; justify-content: space-between;
+            padding: 10px; border: 1px solid #1a551a; border-bottom: none;
+            background: #051105; font-weight: bold;
+        }
+        .overlay {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0, 15, 0, 0.98); border: 2px solid #33ff33;
+            padding: 20px; text-align: center; z-index: 20; min-width: 350px;
+        }
+        input { 
+            background: #000; border: 1px solid #33ff33; color: #33ff33; 
+            font-family: 'Courier New'; font-size: 24px; text-align: center;
+            outline: none; width: 200px; text-transform: uppercase;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="no-cursor">
+    <div id="ui">
+        <span>PCW 8256 - RABBIT CHASE</span>
+        <span>RABBITS: <span id="rabbit-count">0</span> | SCORE: <span id="score">0000</span></span>
+    </div>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="overlay" class="overlay hidden">
+            <h2 id="status-text">SYSTEM HALTED</h2>
+            <div id="high-score-input" class="hidden">
+                <p>NEW RECORD DETECTED</p>
+                <input type="text" id="player-name" maxlength="8" autocomplete="off">
+                <p>PRESS [ENTER] TO COMMIT</p>
+            </div>
+            <div id="leaderboard"><table id="score-table"></table></div>
+            <p style="margin-top:20px;">[R] RESTART SYSTEM</p>
+        </div>
+        <div id="pause-overlay" class="overlay hidden">
+            <h2>SYSTEM PAUSED</h2>
+            <p>PRESS [P] TO RESUME</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreElement = document.getElementById("score");
+        const rabbitCountElement = document.getElementById("rabbit-count");
+        const overlay = document.getElementById("overlay");
+        const pauseOverlay = document.getElementById("pause-overlay");
+        const nameInput = document.getElementById("player-name");
+
+        const gridSize = 20;
+        const MAX_RABBITS = 8; // Increased to 20
+        let score, dx, dy, speed, snake, rabbits, gameActive, isPaused, changingDirection, enteringName;
+
+        function init() {
+            score = 0; dx = gridSize; dy = 0; speed = 100;
+            snake = [{x: 100, y: 100}, {x: 80, y: 100}, {x: 60, y: 100}];
+            rabbits = [];
+            gameActive = true; isPaused = false; changingDirection = false; enteringName = false;
+            
+            scoreElement.innerHTML = "0000";
+            overlay.classList.add("hidden");
+            pauseOverlay.classList.add("hidden");
+            document.getElementById("high-score-input").classList.add("hidden");
+            
+            spawnRabbit(); 
+            runGame();
+        }
+
+        function spawnRabbit() {
+            if (rabbits.length >= MAX_RABBITS) return;
+            let newR;
+            let valid = false;
+            let attempts = 0;
+            while (!valid && attempts < 100) {
+                newR = {
+                    x: Math.floor(Math.random() * (canvas.width / gridSize)) * gridSize,
+                    y: Math.floor(Math.random() * (canvas.height / gridSize)) * gridSize
+                };
+                const onSnake = snake.some(p => p.x === newR.x && p.y === newR.y);
+                const onRabbit = rabbits.some(r => r.x === newR.x && r.y === newR.y);
+                if (!onSnake && !onRabbit) valid = true;
+                attempts++;
+            }
+            if(valid) rabbits.push(newR);
+            rabbitCountElement.innerText = rabbits.length;
+        }
+
+        function runGame() {
+            if (!gameActive || isPaused) return;
+
+            setTimeout(() => {
+                changingDirection = false;
+                
+                // Clear
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw Rabbits
+                rabbits.forEach(r => {
+                    ctx.fillStyle = "#33ff33";
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = "#33ff33";
+                    ctx.fillRect(r.x + 4, r.y + 2, 4, 6); ctx.fillRect(r.x + 12, r.y + 2, 4, 6);
+                    ctx.fillRect(r.x + 4, r.y + 8, 12, 8); ctx.fillRect(r.x + 2, r.y + 12, 2, 4);
+                });
+
+                // Draw Snake
+                ctx.fillStyle = "#33ff33";
+                ctx.shadowBlur = 8;
+                snake.forEach(part => ctx.fillRect(part.x + 1, part.y + 1, gridSize - 2, gridSize - 2));
+
+                advanceSnake();
+
+                if (didGameEnd()) gameOver();
+                else runGame();
+            }, speed);
+        }
+
+        function advanceSnake() {
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+            snake.unshift(head);
+
+            const hitIndex = rabbits.findIndex(r => r.x === head.x && r.y === head.y);
+
+            if (hitIndex !== -1) {
+                score += 100;
+                scoreElement.innerHTML = score.toString().padStart(4, '0');
+                rabbits.splice(hitIndex, 1);
+
+                // Logic Update: Randomly select 0, 1, or up to 4 extra rabbits
+                let toSpawn = Math.floor(Math.random() * 5); 
+                for (let i = 0; i < toSpawn; i++) spawnRabbit();
+
+                if (speed > 40) speed -= 1.5;
+            } else {
+                snake.pop();
+            }
+
+            // Never less than 1 rabbit
+            if (rabbits.length === 0) spawnRabbit();
+            rabbitCountElement.innerText = rabbits.length;
+        }
+
+        function didGameEnd() {
+            const head = snake[0];
+            if (head.x < 0 || head.x >= canvas.width || head.y < 0 || head.y >= canvas.height) return true;
+            for (let i = 4; i < snake.length; i++) {
+                if (snake[i].x === head.x && snake[i].y === head.y) return true;
+            }
+            return false;
+        }
+
+        function gameOver() {
+            gameActive = false;
+            overlay.classList.remove("hidden");
+            const highScores = JSON.parse(localStorage.getItem("pcw_snake_scores")) || [];
+            if (score > (highScores[9]?.score || 0)) {
+                enteringName = true;
+                document.getElementById("high-score-input").classList.remove("hidden");
+                setTimeout(() => nameInput.focus(), 10);
+            }
+            displayScores();
+        }
+
+        function displayScores() {
+            const highScores = JSON.parse(localStorage.getItem("pcw_snake_scores")) || [];
+            document.getElementById("score-table").innerHTML = `<tr><th>RANK</th><th>NAME</th><th>SCORE</th></tr>` + 
+                highScores.map((s, i) => `<tr><td>${i+1}</td><td>${s.name}</td><td>${s.score}</td></tr>`).join('');
+        }
+
+        window.addEventListener("keydown", e => {
+            if (enteringName) {
+                if (e.key === 'Enter') {
+                    let highScores = JSON.parse(localStorage.getItem("pcw_snake_scores")) || [];
+                    highScores.push({ name: nameInput.value.toUpperCase() || "ANON", score });
+                    highScores.sort((a, b) => b.score - a.score);
+                    localStorage.setItem("pcw_snake_scores", JSON.stringify(highScores.slice(0, 10)));
+                    location.reload();
+                }
+                return;
+            }
+            if (e.key.toLowerCase() === 'p') {
+                isPaused = !isPaused;
+                pauseOverlay.classList.toggle("hidden", !isPaused);
+                if (!isPaused) runGame();
+            }
+            if (e.key.toLowerCase() === 'r') location.reload();
+            if (changingDirection || isPaused || !gameActive) return;
+            
+            changingDirection = true;
+            if (e.keyCode === 37 && dx === 0) { dx = -gridSize; dy = 0; }
+            else if (e.keyCode === 38 && dy === 0) { dx = 0; dy = -gridSize; }
+            else if (e.keyCode === 39 && dx === 0) { dx = gridSize; dy = 0; }
+            else if (e.keyCode === 40 && dy === 0) { dx = 0; dy = gridSize; }
+        });
+
+        init();
+    </script>
+</body>
+</html>
