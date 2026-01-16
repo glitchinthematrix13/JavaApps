@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaApps | System Directory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&display=swap');
+        
+        body {
+            font-family: 'Fira Code', monospace;
+            background-color: #050505;
+        }
+
+        .terminal-border {
+            border: 1px solid #1a331a;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.05);
+        }
+
+        .file-row:hover {
+            background-color: #0c1a0c;
+            border-color: #33ff33;
+        }
+
+        .glow-text {
+            text-shadow: 0 0 8px rgba(51, 255, 51, 0.5);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #050505; }
+        ::-webkit-scrollbar-thumb { background: #1a331a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #33ff33; }
+    </style>
+</head>
+<body class="text-green-500 min-h-screen p-4 md:p-12">
+
+    <div class="max-w-5xl mx-auto">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-green-900/50 pb-6">
+            <div>
+                <h1 class="text-2xl font-bold glow-text flex items-center gap-2">
+                    <span class="animate-pulse">_</span>SYSTEM.DIRECTORY: JavaApps
+                </h1>
+                <p class="text-green-800 text-sm mt-1">HOST: glitchinthematrix13.github.io</p>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="fetchFiles()" class="text-xs border border-green-800 px-4 py-2 hover:bg-green-900/30 transition uppercase tracking-widest">
+                    Reload_List
+                </button>
+            </div>
+        </header>
+
+        <div id="loader" class="text-center py-20">
+            <p class="animate-bounce tracking-[0.2em]">INITIALIZING SCAN...</p>
+        </div>
+
+        <div id="file-container" class="space-y-3">
+            </div>
+
+        <footer class="mt-12 text-center border-t border-green-900/30 pt-6">
+            <p class="text-[10px] text-green-900 uppercase tracking-widest">
+                Authorized Access Only // Connected to GitHub API v3
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        const config = {
+            owner: 'glitchinthematrix13',
+            repo: 'JavaApps',
+            branch: 'main'
+        };
+
+        async function fetchFiles() {
+            const container = document.getElementById('file-container');
+            const loader = document.getElementById('loader');
+            
+            container.innerHTML = '';
+            loader.classList.remove('hidden');
+
+            try {
+                // Fetching from GitHub API
+                const response = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/`);
+                const items = await response.json();
+
+                loader.classList.add('hidden');
+
+                // Filter for HTML files, excluding index.html
+                const files = items.filter(item => 
+                    item.type === 'file' && 
+                    item.name.endsWith('.html') && 
+                    item.name.toLowerCase() !== 'index.html'
+                );
+
+                if (files.length === 0) {
+                    container.innerHTML = `<p class="text-center text-green-900 py-10 italic">// NO EXECUTABLES FOUND IN ROOT</p>`;
+                    return;
+                }
+
+                files.forEach((file, index) => {
+                    const liveUrl = `https://${config.owner}.github.io/${config.repo}/${file.name}`;
+                    const githubUrl = file.html_url;
+                    const fileSize = (file.size / 1024).toFixed(1) + ' KB';
+                    
+                    const row = document.createElement('div');
+                    row.className = 'file-row terminal-border bg-black p-4 flex flex-col md:flex-row justify-between items-center gap-4 transition-all duration-200';
+                    
+                    row.innerHTML = `
+                        <div class="flex items-center gap-4 w-full md:w-auto">
+                            <span class="text-green-900 text-xs font-bold">${(index + 1).toString().padStart(2, '0')}</span>
+                            <div class="flex flex-col">
+                                <span class="text-white font-semibold tracking-wide">${file.name}</span>
+                                <span class="text-[10px] text-green-900 uppercase tracking-tighter">Size: ${fileSize} // Format: HTML5</span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex gap-4 w-full md:w-auto">
+                            <a href="${liveUrl}" target="_blank" 
+                               class="flex-1 md:flex-none text-center border border-green-500 text-green-500 px-6 py-2 text-xs font-bold hover:bg-green-500 hover:text-black transition uppercase">
+                                Run_App
+                            </a>
+                            <a href="${githubUrl}" target="_blank" 
+                               class="flex-1 md:flex-none text-center border border-green-900 text-green-900 px-6 py-2 text-xs font-bold hover:bg-green-900 hover:text-white transition uppercase">
+                                Source
+                            </a>
+                        </div>
+                    `;
+                    container.appendChild(row);
+                });
+
+            } catch (error) {
+                loader.classList.add('hidden');
+                container.innerHTML = `<p class="text-center text-red-500 py-10">!! API_CONNECTION_ERROR: UNABLE TO REACH REPOSITORY !!</p>`;
+                console.error(error);
+            }
+        }
+
+        // Initial load
+        fetchFiles();
+    </script>
+</body>
+</html>
