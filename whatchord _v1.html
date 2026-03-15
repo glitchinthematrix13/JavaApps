@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Finder</title>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #e74c3c;
+            --bg: #f4f7f6;
+        }
+        body {
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        h2 { text-align: center; color: var(--primary); margin-top: 0; }
+        .string-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        label { width: 30px; font-weight: bold; color: var(--primary); }
+        input {
+            flex-grow: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px; /* Prevents iOS zoom on focus */
+            outline: none;
+        }
+        input:focus { border-color: var(--accent); }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 8px;
+            min-height: 50px;
+            text-align: center;
+        }
+        .chord-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        .note-display { color: #666; font-size: 0.9em; margin-top: 5px; }
+        p { font-size: 0.8em; color: #888; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Chord Identifier</h2>
+    <p>Enter fret numbers (0 for open, leave blank or 'x' for muted)</p>
+    
+    <div id="inputs">
+        </div>
+
+    <div class="result-box">
+        <div id="chord-output" class="chord-name">Enter Frets...</div>
+        <div id="notes-output" class="note-display"></div>
+    </div>
+</div>
+
+<script>
+    const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const TUNING = [4, 11, 7, 2, 9, 4]; // E2, A2, D3, G3, B3, E4 in semitones (E A D G B E)
+    const STRINGS = ['e', 'B', 'G', 'D', 'A', 'E'];
+
+    // Common chord formulas (intervals from root)
+    const CHORD_DATA = {
+        '': [0, 4, 7],             // Major
+        'm': [0, 3, 7],            // Minor
+        '7': [0, 4, 7, 10],        // Dominant 7th
+        'maj7': [0, 4, 7, 11],     // Major 7th
+        'm7': [0, 3, 7, 10],       // Minor 7th
+        'sus4': [0, 5, 7],         // Sus4
+        'sus2': [0, 2, 7],         // Sus2
+        'dim': [0, 3, 6],          // Diminished
+        'aug': [0, 4, 8],          // Augmented
+        '5': [0, 7]                // Power chord
+    };
+
+    const container = document.getElementById('inputs');
+
+    // Create inputs
+    STRINGS.forEach((s, i) => {
+        const div = document.createElement('div');
+        div.className = 'string-row';
+        div.innerHTML = `<label>${s}</label><input type="text" inputmode="numeric" placeholder="x" data-idx="${5-i}">`;
+        container.appendChild(div);
+    });
+
+    const inputs = document.querySelectorAll('input');
+    inputs.forEach(input => input.addEventListener('input', calculateChord));
+
+    function calculateChord() {
+        let activeNotes = [];
+        
+        inputs.forEach(input => {
+            const fret = parseInt(input.value);
+            const stringIdx = parseInt(input.dataset.idx);
+            if (!isNaN(fret)) {
+                const noteValue = (TUNING[stringIdx] + fret) % 12;
+                if (!activeNotes.includes(noteValue)) activeNotes.push(noteValue);
+            }
+        });
+
+        if (activeNotes.length === 0) {
+            updateUI("None", "");
+            return;
+        }
+
+        const noteNames = activeNotes.map(n => NOTES[n]);
+        let possibleChords = [];
+
+        // Check each note as a potential root
+        activeNotes.forEach(root => {
+            const intervals = activeNotes
+                .map(n => (n - root + 12) % 12)
+                .sort((a, b) => a - b);
+
+            for (const [suffix, formula] of Object.entries(CHORD_DATA)) {
+                if (formula.every(val => intervals.includes(val)) && formula.length >= intervals.length - 1) {
+                    possibleChords.push(NOTES[root] + suffix);
+                }
+            }
+        });
+
+        updateUI(
+            possibleChords.length > 0 ? [...new Set(possibleChords)].join(' / ') : "Unknown Chord",
+            "Notes: " + noteNames.join(', ')
+        );
+    }
+
+    function updateUI(chord, notes) {
+        document.getElementById('chord-output').innerText = chord;
+        document.getElementById('notes-output').innerText = notes;
+    }
+</script>
+
+</body>
+</html>
