@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Passport Photo Studio (Fixed Loader)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <style>
+        :root {
+            --primary: #005ea5;
+            --primary-hover: #002f56;
+            --background: #f3f2f1;
+            --text: #0b0c0c;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin-top: 0;
+            color: var(--primary);
+            text-align: center;
+        }
+
+        .instructions {
+            background: #f1f7fb;
+            border-left: 4px solid var(--primary);
+            padding: 15px;
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+        }
+
+        .upload-section {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .file-input-label {
+            background-color: var(--primary);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        #statusMessage {
+            margin-top: 10px;
+            color: #666;
+            font-weight: bold;
+            display: none;
+        }
+
+        .cropper-wrapper {
+            max-height: 500px;
+            margin-bottom: 20px;
+            display: none;
+            border: 1px solid #ccc;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+        }
+
+        .controls {
+            text-align: center;
+            display: none;
+            margin-bottom: 25px;
+        }
+
+        .btn-group {
+            margin-bottom: 15px;
+        }
+
+        .btn-secondary {
+            background-color: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+
+        .btn {
+            background-color: #00823b;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .preview-section {
+            text-align: center;
+            display: none;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>UK Passport Photo Print Generator</h1>
+        
+        <div class="instructions">
+            <strong>UK Passport Criteria:</strong> Head centered, looking straight ahead, neutral expression, plain light background.
+        </div>
+
+        <div class="upload-section">
+            <label for="imageLoader" class="file-input-label">Choose a Photo</label>
+            <input type="file" id="imageLoader" accept="image/*">
+            <div id="statusMessage">Processing image, please wait...</div>
+        </div>
+
+        <div class="cropper-wrapper">
+            <img id="imageToCrop" src="" alt="To crop">
+        </div>
+
+        <div class="controls">
+            <div class="btn-group">
+                <button id="rotateLeftBtn" class="btn-secondary">↺ Rotate Left (1°)</button>
+                <button id="rotateRightBtn" class="btn-secondary">↻ Rotate Right (1°)</button>
+            </div>
+            <div>
+                <button id="cropBtn" class="btn">Generate 6x4 Print Layout</button>
+            </div>
+        </div>
+
+        <div class="preview-section">
+            <h3>Your Ready-to-Print 6x4 Sheet</h3>
+            <canvas id="outputCanvas"></canvas>
+            <div style="margin-top: 15px;">
+                <button id="downloadBtn" class="btn" style="background-color: var(--primary);">Download Image</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+    <script>
+        const imageLoader = document.getElementById('imageLoader');
+        const imageToCrop = document.getElementById('imageToCrop');
+        const cropperWrapper = document.querySelector('.cropper-wrapper');
+        const controls = document.querySelector('.controls');
+        const statusMessage = document.getElementById('statusMessage');
+        const rotateLeftBtn = document.getElementById('rotateLeftBtn');
+        const rotateRightBtn = document.getElementById('rotateRightBtn');
+        const cropBtn = document.getElementById('cropBtn');
+        const previewSection = document.querySelector('.preview-section');
+        const canvas = document.getElementById('outputCanvas');
+        const downloadBtn = document.getElementById('downloadBtn');
+        
+        let cropper;
+
+        const PASSPORT_ASPECT_RATIO = 35 / 45;
+        const PRINT_WIDTH = 1800;
+        const PRINT_HEIGHT = 1200;
+        const PHOTO_WIDTH = 413;
+        const PHOTO_HEIGHT = 531;
+
+        imageLoader.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            statusMessage.style.display = 'block';
+            statusMessage.textContent = "Loading image file...";
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                // Set the image src
+                imageToCrop.src = event.target.result;
+
+                // CRITICAL FIX: Wait completely for the image element to load its pixels before starting Cropper
+                imageToCrop.onload = function() {
+                    if (cropper) {
+                        cropper.destroy();
+                    }
+
+                    cropperWrapper.style.display = 'block';
+                    controls.style.display = 'block';
+                    previewSection.style.display = 'none';
+                    statusMessage.style.display = 'none';
+
+                    cropper = new Cropper(imageToCrop, {
+                        aspectRatio: PASSPORT_ASPECT_RATIO,
+                        viewMode: 1,
+                        autoCropArea: 0.8,
+                        background: false,
+                        responsive: true,
+                        rotatable: true
+                    });
+                };
+            };
+            
+            reader.readAsDataURL(file);
+        });
+
+        rotateLeftBtn.addEventListener('click', () => { if (cropper) cropper.rotate(-1); });
+        rotateRightBtn.addEventListener('click', () => { if (cropper) cropper.rotate(1); });
+
+        cropBtn.addEventListener('click', function() {
+            if (!cropper) return;
+
+            const croppedCanvas = cropper.getCroppedCanvas({
+                width: PHOTO_WIDTH,
+                height: PHOTO_HEIGHT,
+                imageSmoothingEnabled: true,
+                imageSmoothingQuality: 'high',
+                fillColor: '#fff'
+            });
+
+            canvas.width = PRINT_WIDTH;
+            canvas.height = PRINT_HEIGHT;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, PRINT_WIDTH, PRINT_HEIGHT);
+
+            const startX = 140;
+            const gapX = 140 + PHOTO_WIDTH; 
+            const startY = 46;
+            const gapY = 46 + PHOTO_HEIGHT;
+
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 3; col++) {
+                    const x = startX + (col * gapX);
+                    const y = startY + (row * gapY);
+                    ctx.drawImage(croppedCanvas, x, y, PHOTO_WIDTH, PHOTO_HEIGHT);
+                }
+            }
+
+            previewSection.style.display = 'block';
+            window.scrollTo({ top: previewSection.offsetTop, behavior: 'smooth' });
+        });
+
+        downloadBtn.addEventListener('click', function() {
+            const imageURI = canvas.toDataURL('image/jpeg', 0.95);
+            const link = document.createElement('a');
+            link.download = 'uk_passport_6x4_print.jpg';
+            link.href = imageURI;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+    </script>
+</body>
+</html>
