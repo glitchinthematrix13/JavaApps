@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mortgage Overpayment Calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --primary: #3498db;
+            --secondary: #e74c3c;
+            --text-color: #2c3e50;
+            --border-color: #dcdde1;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .wrapper {
+            max-width: 750px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            text-align: center;
+            margin-top: 0;
+            color: #34495e;
+        }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #7f8c8d;
+        }
+
+        input {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            border-color: var(--primary);
+        }
+
+        .result-box {
+            background: #ebf5fb;
+            border-left: 4px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            line-height: 1.4;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 380px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wrapper">
+        <h1>Mortgage Overpayment Tracker</h1>
+        
+        <div class="input-grid">
+            <div class="input-group">
+                <label for="initialValue">Initial Value (£)</label>
+                <input type="number" id="initialValue" value="56500" step="100">
+            </div>
+            <div class="input-group">
+                <label for="interestRate">Interest Rate (%)</label>
+                <input type="number" id="interestRate" value="4.35" step="0.01">
+            </div>
+            <div class="input-group">
+                <label for="repayment">Repayment (£)</label>
+                <input type="number" id="repayment" value="530" step="10">
+            </div>
+            <div class="input-group">
+                <label for="overpayment">Overpayment (£)</label>
+                <input type="number" id="overpayment" value="670" step="10">
+            </div>
+        </div>
+
+        <div class="result-box" id="result">
+            Calculating savings...
+        </div>
+
+        <div class="chart-container">
+            <canvas id="payoffChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const initialValueInput = document.getElementById('initialValue');
+        const interestRateInput = document.getElementById('interestRate');
+        const repaymentInput = document.getElementById('repayment');
+        const overpaymentInput = document.getElementById('overpayment');
+        const resultBox = document.getElementById('result');
+        let payoffChart;
+
+        function calculateMortgage() {
+            const initialBalance = parseFloat(initialValueInput.value) || 0;
+            const annualRate = parseFloat(interestRateInput.value) || 0;
+            const baseRepayment = parseFloat(repaymentInput.value) || 0;
+            const overpayment = parseFloat(overpaymentInput.value) || 0;
+            
+            const monthlyRate = (annualRate / 100) / 12;
+            const totalPaymentWithOverpayment = baseRepayment + overpayment;
+
+            // Safety Checks against infinite loops
+            if (initialBalance > 0 && baseRepayment <= initialBalance * monthlyRate) {
+                resultBox.innerHTML = "⚠️ Baseline Repayment is too low to cover standard monthly interest!";
+                if (payoffChart) payoffChart.destroy();
+                return;
+            }
+
+            // --- SCENARIO A: Standard Repayment Only ---
+            let balanceA = initialBalance;
+            let cumulativeInterestA = 0;
+            let interestHistoryA = [0]; // Index maps to month number
+
+            while (balanceA > 0) {
+                let interest = balanceA * monthlyRate;
+                cumulativeInterestA += interest;
+                balanceA = balanceA + interest - baseRepayment;
+                if (balanceA < 0) balanceA = 0;
+                interestHistoryA.push(cumulativeInterestA);
+            }
+
+            // --- SCENARIO B: Repayment + Overpayment ---
+            let balanceB = initialBalance;
+            let cumulativeInterestB = 0;
+            let monthsB = 0;
+
+            let yearsLabels = ["Start"];
+            let principalRemainingData = [Math.round(initialBalance)];
+            let interestSavedData = [0];
+
+            while (balanceB > 0) {
+                monthsB++;
+                let interest = balanceB * monthlyRate;
+                cumulativeInterestB += interest;
+                balanceB = balanceB + interest - totalPaymentWithOverpayment;
+                if (balanceB < 0) balanceB = 0;
+
+                // Capture data at year-end or when debt is wiped out
+                if (monthsB % 12 === 0 || balanceB === 0) {
+                    const currentYear = Math.ceil(monthsB / 12);
+                    
+                    if (!yearsLabels.includes("Yr " + currentYear)) {
+                        yearsLabels.push("Yr " + currentYear);
+                        principalRemainingData.push(Math.round(balanceB));
+
+                        // Grab what interest *would* have been accumulated up to this exact month in Scenario A
+                        // If Scenario A already finished earlier, take its maximum final interest
+                        const interestWouldHavePaid = interestHistoryA[monthsB] !== undefined ? interestHistoryA[monthsB] : cumulativeInterestA;
+                        
+                        let interestSaved = interestWouldHavePaid - cumulativeInterestB;
+                        if (interestSaved < 0) interestSaved = 0;
+                        
+                        // Output as negative value to extend below the axis line
+                        interestSavedData.push(-Math.round(interestSaved));
+                    }
+                }
+            }
+
+            // Compute summary text metrics
+            const finalYears = Math.floor(monthsB / 12);
+            const finalMonths = monthsB % 12;
+            let timeString = "";
+            if (finalYears > 0) timeString += `${finalYears} year${finalYears > 1 ? 's' : ''}`;
+            if (finalMonths > 0) timeString += `${finalYears > 0 ? ' and ' : ''}${finalMonths} month${finalMonths > 1 ? 's' : ''}`;
+            
+            const totalInterestSavedFinal = cumulativeInterestA - cumulativeInterestB;
+
+            resultBox.innerHTML = `
+                🎉 <b>Time to pay off:</b> <span style="color:#2980b9;">${timeString}</span><br>
+                💰 <b>Total Interest Saved due to overpayment:</b> <span style="color:#27ae60;">£${Math.round(totalInterestSavedFinal).toLocaleString()}</span>
+            `;
+
+            updateChart(yearsLabels, principalRemainingData, interestSavedData);
+        }
+
+        function updateChart(labels, principalData, savedData) {
+            const ctx = document.getElementById('payoffChart').getContext('2d');
+
+            if (payoffChart) {
+                payoffChart.destroy();
+            }
+
+            payoffChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Remaining Principal (£)',
+                            data: principalData,
+                            backgroundColor: '#3498db',
+                            borderRadius: { topLeft: 4, topRight: 4 },
+                        },
+                        {
+                            label: 'Cumulative Interest Saved (£)',
+                            data: savedData,
+                            backgroundColor: '#e74c3c',
+                            borderRadius: { bottomLeft: 4, bottomRight: 4 },
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true, // Stacks bars perfectly vertically
+                            grid: { display: false }
+                        },
+                        y: {
+                            stacked: true, // Keeps axis scaling aligned for bidirectional stacks
+                            ticks: {
+                                callback: function(value) {
+                                    return '£' + Math.abs(value).toLocaleString();
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    let value = context.raw;
+                                    return label + ': £' + Math.abs(value).toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Real-time calculation triggers
+        [initialValueInput, interestRateInput, repaymentInput, overpaymentInput].forEach(input => {
+            input.addEventListener('input', calculateMortgage);
+        });
+
+        calculateMortgage();
+    </script>
+</body>
+</html>
