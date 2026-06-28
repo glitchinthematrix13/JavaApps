@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smile Modulator</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --primary: #2ecc71;
+            --text: #ffffff;
+            --accent: #3498db;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin: 0 0 5px 0;
+            text-align: center;
+        }
+
+        .instructions {
+            font-size: 0.9rem;
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 15px;
+            min-height: 22px;
+        }
+
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            margin-bottom: 15px;
+        }
+
+        .btn-upload {
+            border: 2px dashed #555;
+            color: #aaa;
+            background-color: transparent;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .workspace {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            cursor: crosshair;
+        }
+
+        .ui-panel {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .emoji-label {
+            font-size: 1.5rem;
+        }
+
+        input[type=range] {
+            flex-grow: 1;
+            height: 8px;
+            border-radius: 5px;
+            background: #444;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+        }
+
+        .btn-reset {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Smile Modulator</h1>
+        <div class="instructions" id="instructionText">Upload a face photo to begin</div>
+
+        <div class="upload-btn-wrapper" id="uploadWrapper">
+            <button class="btn-upload">Choose Photo</button>
+            <input type="file" id="imageLoader" accept="image/*">
+        </div>
+
+        <div class="workspace" id="workspace">
+            <canvas id="appCanvas"></canvas>
+        </div>
+
+        <div class="ui-panel" id="uiPanel">
+            <div class="slider-container">
+                <span class="emoji-label">🙁</span>
+                <input type="range" id="smileSlider" min="-30" max="30" value="0">
+                <span class="emoji-label">🙂</span>
+            </div>
+            <button class="btn-reset" id="resetBtn">Reset Points</button>
+        </div>
+    </div>
+
+    <script>
+        const imageLoader = document.getElementById('imageLoader');
+        const canvas = document.getElementById('appCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        const instructionText = document.getElementById('instructionText');
+        const workspace = document.getElementById('workspace');
+        const uiPanel = document.getElementById('uiPanel');
+        const uploadWrapper = document.getElementById('uploadWrapper');
+        const smileSlider = document.getElementById('smileSlider');
+        const resetBtn = document.getElementById('resetBtn');
+
+        let baseImage = new Image();
+        let mouthPoints = []; // Stores [{x, y}, {x, y}]
+        let originalImgData = null;
+
+        imageLoader.addEventListener('change', handleImageUpload);
+        canvas.addEventListener('click', handleCanvasClick);
+        smileSlider.addEventListener('input', applyExpressionWarp);
+        resetBtn.addEventListener('click', resetPoints);
+
+        function handleImageUpload(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                baseImage.onload = function() {
+                    // Limit maximum display workspace bounds to avoid heavy CPU processing on mobile
+                    const maxDim = 800;
+                    let w = baseImage.width;
+                    let h = baseImage.height;
+                    if (w > maxDim || h > maxDim) {
+                        if (w > h) {
+                            h = Math.round((h * maxDim) / w);
+                            w = maxDim;
+                        } else {
+                            w = Math.round((w * maxDim) / h);
+                            h = maxDim;
+                        }
+                    }
+
+                    canvas.width = w;
+                    canvas.height = h;
+                    ctx.drawImage(baseImage, 0, 0, w, h);
+                    
+                    // Save virgin state
+                    originalImgData = ctx.getImageData(0, 0, w, h);
+                    
+                    workspace.style.display = 'flex';
+                    uploadWrapper.style.display = 'none';
+                    resetPoints();
+                };
+                baseImage.src = event.target.result;
+            };
+            if(e.target.files[0]) {
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        }
+
+        function handleCanvasClick(e) {
+            if (mouthPoints.length >= 2) return; // Points are locked, manipulation active
+
+            const rect = canvas.getBoundingClientRect();
+            // Map click scaling flawlessly to internal canvas rendering grid
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+
+            mouthPoints.push({ x: clickX, y: clickY });
+            redrawCanvas();
+
+            if (mouthPoints.length === 1) {
+                instructionText.textContent = "Great. Now tap the RIGHT corner of the mouth.";
+            } else if (mouthPoints.length === 2) {
+                instructionText.textContent = "Done! Slide below to change expression.";
+                uiPanel.style.display = 'flex';
+            }
+        }
+
+        function redrawCanvas() {
+            // Restore original clean photo state
+            ctx.putImageData(originalImgData, 0, 0);
+
+            // Render interactive locator targets
+            mouthPoints.forEach((pt, idx) => {
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = idx === 0 ? '#3498db' : '#e74c3c';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            });
+        }
+
+        function applyExpressionWarp() {
+            if (mouthPoints.length < 2) return;
+
+            const intensity = parseInt(smileSlider.value);
+            
+            // Step 1: Restore clean visual data
+            ctx.putImageData(originalImgData, 0, 0);
+
+            // Step 2: Establish math metrics across both mouth anchors
+            const pt1 = mouthPoints[0];
+            const pt2 = mouthPoints[1];
+
+            const dx = pt2.x - pt1.x;
+            const dy = pt2.y - pt1.y;
+            const mouthLength = Math.sqrt(dx * dx + dy * dy);
+            
+            // Set up a adaptive safe zone bounding area around mouth coordinate system
+            const padX = mouthLength * 0.25;
+            const padY = mouthLength * 0.4;
+
+            const minX = Math.min(pt1.x, pt2.x) - padX;
+            const maxX = Math.max(pt1.x, pt2.x) + padX;
+            const minY = Math.min(pt1.y, pt2.y) - padY;
+            const maxY = Math.max(pt1.y, pt2.y) + padY;
+
+            // Grab only targeted mouth area pixels to run array warping
+            const srcData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const dstData = ctx.createImageData(canvas.width, canvas.height);
+            dstData.data.set(srcData.data); // Clone base array configuration
+
+            // Perform programmatic mathematical reverse mapping grid shift lookup loop
+            for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+                if (y < 0 || y >= canvas.height) continue;
+                
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+                    if (x < 0 || x >= canvas.width) continue;
+
+                    // Projection calculations to detect how close we are to the center of the lips
+                    const t = ((x - pt1.x) * dx + (y - pt1.y) * dy) / (mouthLength * mouthLength);
+                    
+                    // Gaussian profile interpolation weights for feathering out warp anomalies smoothly
+                    let factorX = 0;
+                    if (t >= 0 && t <= 1) {
+                        // Blend via sine curve across the structural line width of the lips
+                        factorX = Math.sin(t * Math.PI); 
+                    }
+
+                    // Compute vertical distance attenuation matrix
+                    const lineY = pt1.y + t * dy;
+                    const distToLine = Math.abs(y - lineY);
+                    const maxDistY = padY;
+                    let factorY = 0;
+                    if (distToLine < maxDistY) {
+                        factorY = Math.cos((distToLine / maxDistY) * (Math.PI / 2));
+                    }
+
+                    // Total combined spatial pull weight
+                    const totalWarpWeight = factorX * factorY;
+
+                    // Apply coordinate offset calculation
+                    const deltaY = intensity * totalWarpWeight;
+
+                    // Sample the source pixel coordinate using backward displacement mapping
+                    const srcY = Math.round(y - deltaY);
+                    
+                    if (srcY >= 0 && srcY < canvas.height) {
+                        const srcIdx = (srcY * canvas.width + x) * 4;
+                        const dstIdx = (y * canvas.width + x) * 4;
+
+                        // Swap color channels smoothly
+                        dstData.data[dstIdx] = srcData.data[srcIdx];
+                        dstData.data[dstIdx+1] = srcData.data[srcIdx+1];
+                        dstData.data[dstIdx+2] = srcData.data[srcIdx+2];
+                        dstData.data[dstIdx+3] = srcData.data[srcIdx+3];
+                    }
+                }
+            }
+
+            // Repaint distorted image back to scene viewport
+            ctx.putImageData(dstData, 0, 0);
+        }
+
+        function resetPoints() {
+            mouthPoints = [];
+            smileSlider.value = 0;
+            uiPanel.style.display = 'none';
+            instructionText.textContent = "Tap exactly on the LEFT corner of the mouth.";
+            if (originalImgData) {
+                redrawCanvas();
+            }
+        }
+    </script>
+</body>
+</html>
