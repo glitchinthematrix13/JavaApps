@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Face Studio Lite</title>
+    <style>
+        :root {
+            --bg-color: #0f0f11;
+            --card-bg: #18181c;
+            --primary: #3498db;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --text: #ffffff;
+            --border: #2c2c35;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 750px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            margin: 0 0 5px 0;
+            text-align: center;
+            background: linear-gradient(45deg, #3498db, #2ecc71);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .instructions {
+            font-size: 0.9rem;
+            color: #aaa;
+            text-align: center;
+            margin-bottom: 15px;
+            min-height: 20px;
+        }
+
+        .toolbar {
+            display: none;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            margin-bottom: 15px;
+            width: 100%;
+        }
+
+        .tool-btn {
+            background: #25252b;
+            border: 1px solid var(--border);
+            color: #ccc;
+            padding: 10px 5px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .tool-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .upload-section {
+            text-align: center;
+            padding: 30px 10px;
+            border: 2px dashed #444;
+            border-radius: 12px;
+            margin-bottom: 15px;
+        }
+
+        .file-label {
+            background: var(--primary);
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        input[type="file"] { display: none; }
+
+        .workspace {
+            position: relative;
+            width: 100%;
+            display: none;
+            justify-content: center;
+            margin-bottom: 15px;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .control-panel {
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            background: #202026;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-group label {
+            width: 80px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            color: #bbb;
+        }
+
+        input[type="range"] {
+            flex-grow: 1;
+            height: 6px;
+            background: #444;
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--success);
+            cursor: pointer;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-reset { background: var(--danger); color: white; }
+        .btn-download { background: var(--success); color: white; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Face Studio Lite</h1>
+        <div class="instructions" id="statusText">Upload a portrait photo to begin editing</div>
+
+        <div class="upload-section" id="uploadSection">
+            <label class="file-label">Choose Image
+                <input type="file" id="imageLoader" accept="image/*">
+            </label>
+        </div>
+
+        <div class="toolbar" id="toolbar">
+            <button class="tool-btn active" id="btn-mouth" onclick="switchTool('mouth')">👄 Mouth</button>
+            <button class="tool-btn" id="btn-eyes" onclick="switchTool('eyes')">👁️ Eyes</button>
+            <button class="tool-btn" id="btn-brows" onclick="switchTool('brows')">🤨 Brows</button>
+            <button class="tool-btn" id="btn-nose" onclick="switchTool('nose')">👃 Nose</button>
+        </div>
+
+        <div class="workspace" id="workspace">
+            <canvas id="studioCanvas"></canvas>
+        </div>
+
+        <div class="control-panel" id="controlPanel">
+            <div class="slider-group" id="sliderGroup">
+                <label id="sliderLabel">Intensity</label>
+                <input type="range" id="modifierSlider" min="-30" max="30" value="0">
+            </div>
+            <div class="action-btns">
+                <button class="btn btn-reset" id="resetGlobalBtn">Reset Image</button>
+                <button class="btn btn-download" id="downloadBtn">Export Photo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('studioCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('statusText');
+        const toolbar = document.getElementById('toolbar');
+        const workspace = document.getElementById('workspace');
+        const controlPanel = document.getElementById('controlPanel');
+        const uploadSection = document.getElementById('uploadSection');
+        const modifierSlider = document.getElementById('modifierSlider');
+        const sliderLabel = document.getElementById('sliderLabel');
+        const resetGlobalBtn = document.getElementById('resetGlobalBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        let baseImage = new Image();
+        let originalImgData = null;
+        let currentImgData = null;
+        
+        let activeTool = 'mouth';
+        let anchors = []; 
+
+        const tools = {
+            mouth: { maxAnchors: 2, sliderMin: -35, sliderMax: 35, label: "Expression", hint: "Tap the LEFT, then RIGHT corners of the mouth." },
+            eyes: { maxAnchors: 2, sliderMin: -25, sliderMax: 40, label: "Eye Size", hint: "Tap the center of the LEFT eye, then the RIGHT eye." },
+            brows: { maxAnchors: 4, sliderMin: -30, sliderMax: 30, label: "Brow Lift", hint: "Left Brow: Tap inner then outer corner. Right Brow: Tap inner then outer corner." },
+            nose: { maxAnchors: 1, sliderMin: -25, sliderMax: 25, label: "Nose Size", hint: "Tap directly on the center/tip of the nose." }
+        };
+
+        document.getElementById('imageLoader').addEventListener('change', handleUpload);
+        
+        canvas.addEventListener('mousedown', handlePointerDown);
+        canvas.addEventListener('touchstart', e => { e.preventDefault(); handlePointerDown(e.touches[0]); });
+
+        modifierSlider.addEventListener('input', previewWarpPipeline);
+        modifierSlider.addEventListener('change', commitWarpPipeline);
+
+        resetGlobalBtn.addEventListener('click', resetToOriginal);
+        downloadBtn.addEventListener('click', downloadOutput);
+
+        function handleUpload(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                baseImage.onload = function() {
+                    const maxDim = 800;
+                    let w = baseImage.width, h = baseImage.height;
+                    if (w > maxDim || h > maxDim) {
+                        h = w > h ? Math.round((h * maxDim) / w) : maxDim;
+                        w = w > h ? maxDim : Math.round((w * maxDim) / h);
+                    }
+                    canvas.width = w; canvas.height = h;
+                    ctx.drawImage(baseImage, 0, 0, w, h);
+                    
+                    originalImgData = ctx.getImageData(0, 0, w, h);
+                    currentImgData = ctx.getImageData(0, 0, w, h);
+                    
+                    uploadSection.style.display = 'none';
+                    toolbar.style.display = 'grid';
+                    workspace.style.display = 'flex';
+                    controlPanel.style.display = 'flex';
+                    switchTool('mouth');
+                };
+                baseImage.src = event.target.result;
+            };
+            if(e.target.files[0]) reader.readAsDataURL(e.target.files[0]);
+        }
+
+        function switchTool(toolKey) {
+            commitWarpPipeline();
+
+            activeTool = toolKey;
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${toolKey}`).classList.add('active');
+
+            const conf = tools[toolKey];
+            modifierSlider.min = conf.sliderMin;
+            modifierSlider.max = conf.sliderMax;
+            modifierSlider.value = 0;
+            sliderLabel.textContent = conf.label;
+            
+            anchors = [];
+            statusText.textContent = conf.hint;
+            renderScene(currentImgData);
+        }
+
+        function handlePointerDown(e) {
+            const rect = canvas.getBoundingClientRect();
+            const coords = {
+                x: (e.clientX - rect.left) * (canvas.width / rect.width),
+                y: (e.clientY - rect.top) * (canvas.height / rect.height)
+            };
+            
+            const conf = tools[activeTool];
+
+            if (anchors.length < conf.maxAnchors) {
+                anchors.push(coords);
+                renderScene(currentImgData);
+                
+                if (anchors.length === conf.maxAnchors) {
+                    statusText.textContent = "Anchors locked! Drag intensity slider below.";
+                } else {
+                    if (activeTool === 'brows') {
+                        if (anchors.length === 1) statusText.textContent = "Tap OUTER corner of Left Brow.";
+                        if (anchors.length === 2) statusText.textContent = "Tap INNER corner of Right Brow.";
+                        if (anchors.length === 3) statusText.textContent = "Tap OUTER corner of Right Brow.";
+                    }
+                }
+            }
+        }
+
+        function renderScene(imgDataSrc) {
+            ctx.putImageData(imgDataSrc, 0, 0);
+            anchors.forEach((pt, idx) => {
+                ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = idx < 2 ? '#3498db' : '#e67e22'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+            });
+        }
+
+        function runMathEngine(src, dst, intensity) {
+            if (anchors.length < tools[activeTool].maxAnchors) return false;
+
+            if (activeTool === 'mouth') {
+                warpLineSegment(src, dst, anchors[0], anchors[1], intensity, 'mouth');
+            } else if (activeTool === 'eyes') {
+                applyRadialWarp(src, dst, anchors[0], intensity, 60);
+                applyRadialWarp(src, dst, anchors[1], intensity, 60);
+            } else if (activeTool === 'brows') {
+                warpLineSegment(src, dst, anchors[0], anchors[1], intensity, 'brows');
+                warpLineSegment(src, dst, anchors[2], anchors[3], intensity, 'brows');
+            } else if (activeTool === 'nose') {
+                applyRadialWarp(src, dst, anchors[0], -intensity, 75); // Inverted vector scaling sets expansion mapping
+            }
+            return true;
+        }
+
+        function previewWarpPipeline() {
+            const dst = ctx.createImageData(canvas.width, canvas.height);
+            dst.data.set(currentImgData.data);
+            
+            const processed = runMathEngine(currentImgData, dst, parseInt(modifierSlider.value));
+            renderScene(processed ? dst : currentImgData);
+        }
+
+        function commitWarpPipeline() {
+            const intensity = parseInt(modifierSlider.value);
+            if (anchors.length < tools[activeTool].maxAnchors || intensity === 0) return;
+
+            const dst = ctx.createImageData(canvas.width, canvas.height);
+            dst.data.set(currentImgData.data);
+            
+            runMathEngine(currentImgData, dst, intensity);
+            currentImgData = dst;
+            modifierSlider.value = 0;
+            renderScene(currentImgData);
+        }
+
+        function warpLineSegment(src, dst, pt1, pt2, val, mode) {
+            const dx = pt2.x - pt1.x, dy = pt2.y - pt1.y;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len === 0) return;
+
+            let padX = len * 0.3, padY = len * 0.4;
+            if (mode === 'brows') { padX = len * 0.2; padY = len * 0.35; }
+
+            const minX = Math.max(0, Math.min(pt1.x, pt2.x) - padX), maxX = Math.min(canvas.width - 1, Math.max(pt1.x, pt2.x) + padX);
+            const minY = Math.max(0, Math.min(pt1.y, pt2.y) - padY), maxY = Math.min(canvas.height - 1, Math.max(pt1.y, pt2.y) + padY);
+
+            for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+                    const t = ((x - pt1.x) * dx + (y - pt1.y) * dy) / (len * len);
+                    let fX = (t >= 0 && t <= 1) ? Math.sin(t * Math.PI) : 0;
+                    
+                    const lineY = pt1.y + t * dy;
+                    const lineX = pt1.x + t * dx;
+                    const dist = Math.sqrt((x-lineX)*(x-lineX) + (y-lineY)*(y-lineY));
+                    
+                    let maxD = padY;
+                    let fY = dist < maxD ? Math.cos((dist / maxD) * (Math.PI / 2)) : 0;
+                    let weight = fX * fY;
+
+                    let sY = y;
+                    if (mode === 'mouth') sY -= val * weight;
+                    if (mode === 'brows') sY -= val * weight * 0.7;
+
+                    sx = Math.max(0, Math.min(canvas.width - 1, Math.round(x)));
+                    sy = Math.max(0, Math.min(canvas.height - 1, Math.round(sY)));
+                    const dIdx = (y * canvas.width + x) * 4;
+                    const sIdx = (sy * canvas.width + sx) * 4;
+                    for(let i=0; i<4; i++) dst.data[dIdx+i] = src.data[sIdx+i];
+                }
+            }
+        }
+
+        function applyRadialWarp(src, dst, center, val, radius) {
+            const minX = Math.max(0, center.x - radius), maxX = Math.min(canvas.width-1, center.x + radius);
+            const minY = Math.max(0, center.y - radius), maxY = Math.min(canvas.height-1, center.y + radius);
+
+            for (let y = Math.floor(minY); y <= Math.ceil(maxY); y++) {
+                for (let x = Math.floor(minX); x <= Math.ceil(maxX); x++) {
+                    const dx = x - center.x, dy = y - center.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < radius) {
+                        const weight = Math.pow(Math.cos((dist / radius) * (Math.PI / 2)), 2);
+                        const factor = 1 - (val / 100) * weight;
+                        
+                        sx = Math.max(0, Math.min(canvas.width - 1, Math.round(center.x + dx * factor)));
+                        sy = Math.max(0, Math.min(canvas.height - 1, Math.round(center.y + dy * factor)));
+                        const dIdx = (y * canvas.width + x) * 4;
+                        const sIdx = (sy * canvas.width + sx) * 4;
+                        for(let i=0; i<4; i++) dst.data[dIdx+i] = src.data[sIdx+i];
+                    }
+                }
+            }
+        }
+
+        function resetToOriginal() {
+            currentImgData.data.set(originalImgData.data);
+            anchors = [];
+            modifierSlider.value = 0;
+            statusText.textContent = tools[activeTool].hint;
+            renderScene(currentImgData);
+        }
+
+        function downloadOutput() {
+            ctx.putImageData(currentImgData, 0, 0);
+            const link = document.createElement('a');
+            link.download = 'face_studio_export.jpg';
+            link.href = canvas.toDataURL('image/jpeg', 0.95);
+            link.click();
+            renderScene(currentImgData);
+        }
+    </script>
+</body>
+</html>
