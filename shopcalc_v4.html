@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>UK Mobile Shopping Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        body {
+            overscroll-behavior-y: none;
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen h-[100dvh] flex flex-col justify-between font-sans select-none overflow-hidden">
+
+    <!-- TOP HEADER: Running Total -->
+    <header class="bg-slate-800 border-b border-slate-700/80 px-4 py-3 flex flex-col justify-between shadow-lg shrink-0 z-10">
+        <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center space-x-1.5">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <h1 class="text-xs font-bold uppercase tracking-wider text-slate-400">Shopping Total</h1>
+            </div>
+            <button id="clearAllBtn" class="text-xs text-rose-400 hover:text-rose-300 active:scale-95 font-medium px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg transition-all duration-150">
+                Reset List
+            </button>
+        </div>
+        <div class="flex items-baseline justify-between pt-1">
+            <span class="text-xs uppercase font-semibold text-slate-400 tracking-wider">Overall:</span>
+            <div class="text-4xl sm:text-5xl font-black text-emerald-400 tracking-tight drop-shadow-sm font-mono" id="runningTotal">
+                £0.00
+            </div>
+        </div>
+    </header>
+
+    <!-- MIDDLE AREA: Scrollable Shopping List -->
+    <main class="flex-1 overflow-y-auto px-3 py-3 space-y-3 relative" id="itemsListContainer">
+        <!-- Empty State Message -->
+        <div id="emptyState" class="h-full min-h-[160px] flex flex-col items-center justify-center text-center text-slate-500 py-8 px-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-3 text-slate-600 stroke-[1.2]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <p class="text-sm font-medium text-slate-400">Your shopping list is empty</p>
+            <p class="text-xs text-slate-600 mt-1 max-w-[220px]">Type prices on the keypad below and tap <strong class="text-emerald-400 font-semibold">Add</strong></p>
+        </div>
+
+        <!-- Added Items Output Container -->
+        <div id="itemsList" class="space-y-3 pb-4"></div>
+    </main>
+
+    <!-- BOTTOM AREA: Cash Register Keypad Panel with Bottom Filler Row -->
+    <footer class="bg-slate-800 border-t border-slate-700/80 p-3 shadow-2xl shrink-0 z-10 flex flex-col space-y-2">
+        <!-- Cash Register Current Input Bar -->
+        <div class="bg-slate-950 border border-slate-700/80 rounded-xl px-4 py-2 flex items-center justify-between shadow-inner">
+            <div class="flex items-center space-x-2">
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Entry:</span>
+                <span id="calcDisplay" class="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-mono">£0.00</span>
+            </div>
+            <button id="backspaceBtn" class="text-slate-400 hover:text-white active:scale-90 p-2 rounded-lg hover:bg-slate-800 transition-all duration-100" title="Backspace">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- POS / Cash Register Keypad Grid -->
+        <div class="grid grid-cols-4 gap-1.5">
+            <!-- Row 1 -->
+            <button data-key="clear" class="bg-slate-700/80 active:bg-slate-600 text-rose-400 font-bold py-3.5 rounded-xl text-base transition active:scale-95 shadow-md border border-slate-600/50">C</button>
+            <button data-key="7" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">7</button>
+            <button data-key="8" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">8</button>
+            <button data-key="9" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">9</button>
+
+            <!-- Row 2 -->
+            <button data-key="00" class="bg-slate-700/80 active:bg-slate-600 text-slate-200 font-bold py-3.5 rounded-xl text-base transition active:scale-95 shadow-md border border-slate-600/50">00</button>
+            <button data-key="4" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">4</button>
+            <button data-key="5" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">5</button>
+            <button data-key="6" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">6</button>
+
+            <!-- Row 3 & 4 combined with large vertical ADD button -->
+            <button data-key="1" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">1</button>
+            <button data-key="2" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">2</button>
+            <button data-key="3" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30">3</button>
+
+            <!-- Large Direct ADD Button -->
+            <button data-key="add" id="addBtn" class="bg-emerald-600 active:bg-emerald-500 text-white font-black py-3.5 rounded-xl text-base transition active:scale-95 shadow-lg row-span-2 flex flex-col items-center justify-center space-y-0.5 border border-emerald-500/50 hover:bg-emerald-500">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                <span class="text-xs uppercase tracking-wider font-extrabold">Add</span>
+            </button>
+
+            <!-- Row 4 -->
+            <button data-key="0" class="bg-slate-700/50 active:bg-slate-600 text-white font-bold py-3.5 rounded-xl text-xl transition active:scale-95 shadow-md border border-slate-600/30 col-span-3">0</button>
+        </div>
+
+        <!-- BOTTOM BUTTON-DEPTH SPACER/FILLER ROW (Shifts everything up cleanly above Android bars) -->
+        <div aria-hidden="true" class="h-[48px] w-full shrink-0 pointer-events-none"></div>
+    </footer>
+
+    <script>
+        // State variables
+        let items = [];
+        let penceValue = 0; // Fixed-decimal pence counter (e.g., 109 = £1.09)
+        let itemCounter = 1;
+
+        // DOM elements
+        const runningTotalEl = document.getElementById("runningTotal");
+        const itemsListEl = document.getElementById("itemsList");
+        const itemsListContainer = document.getElementById("itemsListContainer");
+        const emptyStateEl = document.getElementById("emptyState");
+        const calcDisplayEl = document.getElementById("calcDisplay");
+        const clearAllBtn = document.getElementById("clearAllBtn");
+        const backspaceBtn = document.getElementById("backspaceBtn");
+
+        // Helper: Format integer pence into £ string
+        function formatPence(pence) {
+            let pounds = (pence / 100).toFixed(2);
+            return `£${pounds}`;
+        }
+
+        // Update Keypad display value
+        function updateDisplay() {
+            calcDisplayEl.textContent = formatPence(penceValue);
+        }
+
+        // Cash register fixed decimal input logic
+        function handleDigit(digitStr) {
+            if (penceValue > 99999999) return; // Cap max input
+
+            if (digitStr === "00") {
+                if (penceValue > 0) {
+                    penceValue = penceValue * 100;
+                }
+            } else {
+                let num = parseInt(digitStr, 10);
+                penceValue = (penceValue * 10) + num;
+            }
+            updateDisplay();
+        }
+
+        // Backspace action
+        function handleBackspace() {
+            penceValue = Math.floor(penceValue / 10);
+            updateDisplay();
+        }
+
+        // DIRECT ADD ACTION (No popups, instant list update)
+        function addItemDirectly() {
+            if (penceValue <= 0) return; // Prevent 0 price items
+
+            items.push({
+                id: Date.now(),
+                name: `Item ${itemCounter++}`,
+                price: penceValue,
+                qty: 1
+            });
+
+            penceValue = 0;
+            updateDisplay();
+
+            renderItems();
+            setTimeout(() => {
+                itemsListContainer.scrollTop = itemsListContainer.scrollHeight;
+            }, 50);
+        }
+
+        // Render list of shopping items with doubled font sizes for clarity
+        function renderItems() {
+            if (items.length === 0) {
+                emptyStateEl.classList.remove("hidden");
+                itemsListEl.innerHTML = "";
+            } else {
+                emptyStateEl.classList.add("hidden");
+                itemsListEl.innerHTML = items.map((item, index) => {
+                    const itemTotal = item.price * item.qty;
+                    return `
+                        <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 flex items-center justify-between shadow-md transition hover:border-slate-600/80">
+                            <!-- Left: Label & Prices (Doubled font sizes) -->
+                            <div class="flex-1 min-w-0 pr-3">
+                                <div class="text-base sm:text-lg font-bold text-slate-200 truncate">${escapeHtml(item.name)}</div>
+                                <div class="text-base sm:text-lg text-slate-300 mt-1 flex items-center space-x-2">
+                                    <span>${formatPence(item.price)} each</span>
+                                    <span class="text-slate-500">•</span>
+                                    <span class="font-extrabold text-emerald-400 font-mono text-xl sm:text-2xl">${formatPence(itemTotal)}</span>
+                                </div>
+                            </div>
+
+                            <!-- Right: Quantity Controls & Delete -->
+                            <div class="flex items-center space-x-3 shrink-0">
+                                <!-- Plus/Minus Quantity Buttons -->
+                                <div class="flex items-center bg-slate-900/90 border border-slate-700/80 rounded-xl overflow-hidden shadow-inner">
+                                    <button onclick="adjustQty(${index}, -1)" class="w-11 h-11 flex items-center justify-center text-slate-200 hover:bg-slate-700 active:bg-slate-600 transition text-xl font-black active:scale-90" title="Decrease quantity">-</button>
+                                    <span class="w-10 text-center text-base sm:text-lg font-extrabold text-white font-mono">${item.qty}</span>
+                                    <button onclick="adjustQty(${index}, 1)" class="w-11 h-11 flex items-center justify-center text-slate-200 hover:bg-slate-700 active:bg-slate-600 transition text-xl font-black active:scale-90" title="Increase quantity">+</button>
+                                </div>
+
+                                <!-- Delete Item Button (x) -->
+                                <button onclick="deleteItem(${index})" class="w-11 h-11 flex items-center justify-center text-rose-400 hover:bg-rose-500/10 active:bg-rose-500/20 rounded-xl transition-all active:scale-90 font-black text-lg sm:text-xl" title="Delete item">
+                                    ✕
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+            }
+            updateTotal();
+        }
+
+        // Recalculate top running total
+        function updateTotal() {
+            let totalPence = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+            runningTotalEl.textContent = formatPence(totalPence);
+        }
+
+        // Adjust item quantity (+ / -)
+        function adjustQty(index, delta) {
+            items[index].qty += delta;
+            if (items[index].qty <= 0) {
+                items.splice(index, 1);
+            }
+            renderItems();
+        }
+
+        // Delete item from basket
+        function deleteItem(index) {
+            items.splice(index, 1);
+            renderItems();
+        }
+
+        // Utility to escape HTML strings
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Keypad button listeners
+        document.querySelectorAll("[data-key]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const key = btn.getAttribute("data-key");
+                if (!isNaN(key) || key === "00") {
+                    handleDigit(key);
+                } else if (key === "clear") {
+                    penceValue = 0;
+                    updateDisplay();
+                } else if (key === "add") {
+                    addItemDirectly();
+                }
+            });
+        });
+
+        // Backspace listener
+        backspaceBtn.addEventListener("click", handleBackspace);
+
+        // Reset all list items
+        clearAllBtn.addEventListener("click", () => {
+            if (items.length > 0) {
+                items = [];
+                itemCounter = 1;
+                renderItems();
+            }
+        });
+
+        // Keyboard support for desktop testing
+        window.addEventListener("keydown", (e) => {
+            if (e.key >= "0" && e.key <= "9") {
+                handleDigit(e.key);
+            } else if (e.key === "Backspace") {
+                handleBackspace();
+            } else if (e.key === "Enter") {
+                addItemDirectly();
+            } else if (e.key === "Escape" || e.key === "c" || e.key === "C") {
+                penceValue = 0;
+                updateDisplay();
+            }
+        });
+
+        // Initial render on load
+        renderItems();
+    </script>
+</body>
+</html>
