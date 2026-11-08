@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML5 Diagnostics & Device Intelligence Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                        cardborder: '#334155',
+                        accent: '#38bdf8',
+                        accenthover: '#0284c7',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Font Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Smooth transitions for interactive elements */
+        .card-hover {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-200 font-sans min-h-screen pb-12 antialiased selection:bg-accent selection:text-slate-900">
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 bg-accent text-slate-950 font-semibold px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center space-x-2">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toast-msg">Copied to clipboard!</span>
+    </div>
+
+    <!-- Header & Navigation -->
+    <header class="border-b border-cardborder bg-cardbg/80 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-500 flex items-center justify-center text-slate-950 text-xl font-bold shadow-md shadow-sky-500/20">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                        HTML5 Diagnostic Dashboard
+                        <span class="text-xs font-mono font-normal bg-sky-500/10 text-accent border border-sky-500/30 px-2 py-0.5 rounded-full">v2.5</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Client-Side Hardware, API Capability & Telemetry Inspector</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center space-x-3">
+                <button onclick="refreshDiagnostics()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg border border-cardborder transition flex items-center space-x-2 shadow-sm">
+                    <i id="refresh-icon" class="fa-solid fa-rotate-right text-accent"></i>
+                    <span>Refresh</span>
+                </button>
+                <button onclick="exportJSON()" class="px-4 py-2 bg-accent hover:bg-accenthover text-slate-950 text-sm font-semibold rounded-lg transition flex items-center space-x-2 shadow-md shadow-accent/20">
+                    <i class="fa-solid fa-download"></i>
+                    <span>Export JSON</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
+
+        <!-- Quick Summary Metrics Bar -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-cardbg border border-cardborder rounded-xl p-4 flex items-center space-x-4">
+                <div class="p-3 bg-sky-500/10 text-accent rounded-lg text-xl">
+                    <i class="fa-solid fa-globe"></i>
+                </div>
+                <div class="overflow-hidden">
+                    <div class="text-xs text-slate-400 font-medium">Public IP</div>
+                    <div id="stat-ip" class="text-sm sm:text-base font-semibold font-mono text-white truncate">Fetching...</div>
+                </div>
+            </div>
+            <div class="bg-cardbg border border-cardborder rounded-xl p-4 flex items-center space-x-4">
+                <div class="p-3 bg-indigo-500/10 text-indigo-400 rounded-lg text-xl">
+                    <i class="fa-solid fa-laptop"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400 font-medium">Browser / Platform</div>
+                    <div id="stat-browser" class="text-sm sm:text-base font-semibold text-white truncate">Detecting...</div>
+                </div>
+            </div>
+            <div class="bg-cardbg border border-cardborder rounded-xl p-4 flex items-center space-x-4">
+                <div class="p-3 bg-emerald-500/10 text-emerald-400 rounded-lg text-xl">
+                    <i class="fa-solid fa-battery-three-quarters"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400 font-medium">Battery Status</div>
+                    <div id="stat-battery" class="text-sm sm:text-base font-semibold text-white truncate">Reading...</div>
+                </div>
+            </div>
+            <div class="bg-cardbg border border-cardborder rounded-xl p-4 flex items-center space-x-4">
+                <div class="p-3 bg-amber-500/10 text-amber-400 rounded-lg text-xl">
+                    <i class="fa-solid fa-wifi"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-400 font-medium">Effective Network</div>
+                    <div id="stat-network" class="text-sm sm:text-base font-semibold text-white truncate">Measuring...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid Layout for Detailed Diagnostic Sections -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Card 1: Browser & Environment -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-compass text-accent"></i>
+                            Browser & Client Environment
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">Navigator</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Browser Name & Version:</span>
+                            <span id="browser-name" class="font-semibold text-white text-right">Detecting...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Engine / Vendor:</span>
+                            <span id="browser-vendor" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Primary Language:</span>
+                            <span id="browser-lang" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Preferred Languages:</span>
+                            <span id="browser-langs" class="text-slate-200 text-right truncate max-w-[200px] sm:max-w-[300px]">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Cookies Enabled:</span>
+                            <span id="browser-cookies" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Online Status:</span>
+                            <span id="browser-online" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">PDF Viewer Built-in:</span>
+                            <span id="browser-pdf" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="pt-2">
+                            <span class="text-slate-400 block mb-1">User Agent String:</span>
+                            <div id="browser-ua" class="p-2.5 bg-darkbg rounded border border-cardborder text-slate-300 text-xs break-all font-mono select-all">
+                                Detecting...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 2: Hardware & Battery -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-cpu text-emerald-400"></i>
+                            Hardware & Power Telemetry
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">Hardware</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">CPU Cores (Logical):</span>
+                            <span id="hw-cores" class="font-semibold text-white text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Estimated Device RAM:</span>
+                            <span id="hw-ram" class="font-semibold text-white text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Max Touch Points:</span>
+                            <span id="hw-touch" class="font-semibold text-white text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Battery Level:</span>
+                            <span id="batt-level" class="font-semibold text-white text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Charging Status:</span>
+                            <span id="batt-charging" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Time to Full / Empty:</span>
+                            <span id="batt-time" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <!-- Battery Bar Progress -->
+                        <div class="pt-2">
+                            <div class="flex justify-between text-xs text-slate-400 mb-1">
+                                <span>Battery Capacity Gauge</span>
+                                <span id="batt-pct-text">0%</span>
+                            </div>
+                            <div class="w-full bg-darkbg rounded-full h-3 border border-cardborder overflow-hidden">
+                                <div id="batt-bar" class="bg-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 3: Display & Screen Specs -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-display text-purple-400"></i>
+                            Display & Screen Metrics
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">Screen</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Screen Resolution:</span>
+                            <span id="screen-res" class="font-semibold text-white text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Available Screen Space:</span>
+                            <span id="screen-avail" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Viewport Size:</span>
+                            <span id="screen-viewport" class="font-semibold text-accent text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Device Pixel Ratio (DPR):</span>
+                            <span id="screen-dpr" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Color Depth:</span>
+                            <span id="screen-color-depth" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Orientation & Angle:</span>
+                            <span id="screen-orientation" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Wide Color Gamut (P3):</span>
+                            <span id="screen-gamut" class="text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Dark Mode Preference:</span>
+                            <span id="screen-darkmode" class="text-right">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 4: GPU & Graphics Engine -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-cube text-amber-400"></i>
+                            GPU & WebGL Rendering Engine
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">WebGL</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">WebGL 1.0 Support:</span>
+                            <span id="gpu-webgl1" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">WebGL 2.0 Support:</span>
+                            <span id="gpu-webgl2" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">GPU Hardware Vendor:</span>
+                            <span id="gpu-vendor" class="text-slate-200 text-right truncate max-w-[200px] sm:max-w-[280px]">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Unmasked Renderer String:</span>
+                            <span id="gpu-renderer" class="text-slate-200 text-right truncate max-w-[200px] sm:max-w-[280px]">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Max Texture Size:</span>
+                            <span id="gpu-max-tex" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Max Renderbuffer Size:</span>
+                            <span id="gpu-max-rb" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Antialiasing (MSAA):</span>
+                            <span id="gpu-aa" class="text-slate-200 text-right">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 5: Network Information & Geolocation -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-network-wired text-sky-400"></i>
+                            Network, IP & Location Telemetry
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">Connection</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Public IP Address:</span>
+                            <span id="net-ip" class="font-semibold text-accent text-right">Fetching...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">ISP / Organization:</span>
+                            <span id="net-isp" class="text-slate-200 text-right truncate max-w-[200px] sm:max-w-[280px]">Fetching...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">IP Location:</span>
+                            <span id="net-location" class="text-slate-200 text-right">Fetching...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Effective Type (ECT):</span>
+                            <span id="net-ect" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Downlink Bandwidth:</span>
+                            <span id="net-downlink" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Round Trip Latency (RTT):</span>
+                            <span id="net-rtt" class="text-slate-200 text-right">-</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Data Saver Mode:</span>
+                            <span id="net-savedata" class="text-slate-200 text-right">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Card 6: Audio & Media Peripherals -->
+            <section class="bg-cardbg border border-cardborder rounded-xl p-6 card-hover flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center justify-between pb-4 border-b border-cardborder mb-4">
+                        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-microphone text-rose-400"></i>
+                            Media & Audio Peripherals
+                        </h2>
+                        <span class="text-xs bg-slate-800 text-slate-300 font-mono px-2 py-1 rounded border border-slate-700">MediaDevices</span>
+                    </div>
+                    <div class="space-y-3 font-mono text-xs sm:text-sm">
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Audio Input (Microphones):</span>
+                            <span id="media-mics" class="font-semibold text-white text-right">Enumerating...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Video Input (Cameras):</span>
+                            <span id="media-cams" class="font-semibold text-white text-right">Enumerating...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Audio Output (Speakers):</span>
+                            <span id="media-speakers" class="font-semibold text-white text-right">Enumerating...</span>
+                        </div>
+                        <div class="flex justify-between items-center py-1 border-b border-slate-800">
+                            <span class="text-slate-400">Media Capture Support:</span>
+                            <span id="media-support" class="font-semibold text-right">-</span>
+                        </div>
+                        <div class="pt-2">
+                            <button onclick="requestMediaPermissions()" class="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-sans font-medium text-slate-300 rounded transition flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-key text-accent"></i>
+                                <span>Request Media Permission for Labels</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Section 7: HTML5 Feature & API Support Checklist -->
+        <section class="bg-cardbg border border-cardborder rounded-xl p-6">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-cardborder mb-6 gap-2">
+                <div>
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-list-check text-accent"></i>
+                        HTML5 Browser API Capabilities & Support Checklist
+                    </h2>
+                    <p class="text-xs text-slate-400 font-sans mt-0.5">Real-time inspection of client-side web standards and experimental browser APIs.</p>
+                </div>
+                <div id="api-score" class="text-xs font-mono bg-sky-500/10 text-accent border border-sky-500/30 px-3 py-1.5 rounded-lg font-semibold">
+                    Calculating score...
+                </div>
+            </div>
+
+            <!-- API Grid -->
+            <div id="api-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 font-mono text-xs">
+                <!-- Javascript dynamic injection -->
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 text-center text-xs text-slate-500">
+        <p>Client-side HTML5 System Diagnostic Suite • Pure JavaScript & Web Standards Telemetry</p>
+    </footer>
+
+    <!-- Script Logic -->
+    <script>
+        // Global Data Store for Export
+        let diagnosticData = {};
+
+        // Helper: Badge renderer for supported/unsupported
+        function getStatusBadge(isSupported, customText = null) {
+            if (isSupported) {
+                return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <i class="fa-solid fa-check text-[10px] mr-1"></i>${customText || 'Supported'}
+                        </span>`;
+            } else {
+                return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            <i class="fa-solid fa-xmark text-[10px] mr-1"></i>${customText || 'Not Supported'}
+                        </span>`;
+            }
+        }
+
+        // 1. Browser & User Agent Detection
+        function detectBrowser() {
+            const ua = navigator.userAgent;
+            let browserName = "Unknown Browser";
+            let browserVersion = "";
+
+            if (ua.indexOf("Firefox") > -1) {
+                browserName = "Mozilla Firefox";
+                browserVersion = ua.match(/Firefox\/([0-9.]+)/)?.[1] || "";
+            } else if (ua.indexOf("SamsungBrowser") > -1) {
+                browserName = "Samsung Internet";
+                browserVersion = ua.match(/SamsungBrowser\/([0-9.]+)/)?.[1] || "";
+            } else if (ua.indexOf("Opera") > -1 || ua.indexOf("OPR") > -1) {
+                browserName = "Opera";
+                browserVersion = ua.match(/(?:Opera|OPR)\/([0-9.]+)/)?.[1] || "";
+            } else if (ua.indexOf("Edg") > -1) {
+                browserName = "Microsoft Edge";
+                browserVersion = ua.match(/Edg\/([0-9.]+)/)?.[1] || "";
+            } else if (ua.indexOf("Chrome") > -1) {
+                browserName = "Google Chrome";
+                browserVersion = ua.match(/Chrome\/([0-9.]+)/)?.[1] || "";
+            } else if (ua.indexOf("Safari") > -1) {
+                browserName = "Apple Safari";
+                browserVersion = ua.match(/Version\/([0-9.]+)/)?.[1] || "";
+            }
+
+            const cookiesEnabled = navigator.cookieEnabled;
+            const onlineStatus = navigator.onLine;
+            const pdfViewer = !!(navigator.pdfViewerEnabled);
+
+            document.getElementById('browser-name').innerText = `${browserName} ${browserVersion}`;
+            document.getElementById('stat-browser').innerText = browserName;
+            document.getElementById('browser-vendor').innerText = navigator.vendor || 'N/A';
+            document.getElementById('browser-lang').innerText = navigator.language || 'N/A';
+            document.getElementById('browser-langs').innerText = navigator.languages ? navigator.languages.join(', ') : navigator.language;
+            document.getElementById('browser-cookies').innerHTML = getStatusBadge(cookiesEnabled, cookiesEnabled ? 'Enabled' : 'Disabled');
+            document.getElementById('browser-online').innerHTML = getStatusBadge(onlineStatus, onlineStatus ? 'Online' : 'Offline');
+            document.getElementById('browser-pdf').innerHTML = getStatusBadge(pdfViewer);
+            document.getElementById('browser-ua').innerText = ua;
+
+            return {
+                name: browserName,
+                version: browserVersion,
+                vendor: navigator.vendor,
+                userAgent: ua,
+                language: navigator.language,
+                languages: navigator.languages,
+                cookiesEnabled: cookiesEnabled,
+                online: onlineStatus,
+                pdfViewerEnabled: pdfViewer
+            };
+        }
+
+        // 2. Hardware & Battery Telemetry
+        async function detectHardware() {
+            const cores = navigator.hardwareConcurrency || 'N/A';
+            const ram = navigator.deviceMemory ? `~${navigator.deviceMemory} GB` : 'N/A';
+            const touchPoints = navigator.maxTouchPoints || 0;
+
+            document.getElementById('hw-cores').innerText = cores;
+            document.getElementById('hw-ram').innerText = ram;
+            document.getElementById('hw-touch').innerText = `${touchPoints} point(s)`;
+
+            let batteryInfo = { supported: false };
+
+            if ('getBattery' in navigator) {
+                try {
+                    const battery = await navigator.getBattery();
+                    batteryInfo.supported = true;
+                    
+                    const updateBattery = () => {
+                        const levelPct = Math.round(battery.level * 100);
+                        const isCharging = battery.charging;
+                        
+                        document.getElementById('stat-battery').innerText = `${levelPct}% ${isCharging ? '(Charging)' : ''}`;
+                        document.getElementById('batt-level').innerText = `${levelPct}%`;
+                        document.getElementById('batt-charging').innerHTML = getStatusBadge(isCharging, isCharging ? 'Charging' : 'Discharging');
+                        
+                        let timeStr = 'N/A';
+                        if (isCharging && battery.chargingTime !== Infinity) {
+                            timeStr = `${Math.round(battery.chargingTime / 60)} min to full`;
+                        } else if (!isCharging && battery.dischargingTime !== Infinity) {
+                            timeStr = `${Math.round(battery.dischargingTime / 60)} min remaining`;
+                        }
+                        document.getElementById('batt-time').innerText = timeStr;
+                        
+                        // Progress bar update
+                        const battBar = document.getElementById('batt-bar');
+                        document.getElementById('batt-pct-text').innerText = `${levelPct}%`;
+                        battBar.style.width = `${levelPct}%`;
+                        if (levelPct <= 20 && !isCharging) {
+                            battBar.className = "bg-rose-500 h-full rounded-full transition-all duration-500";
+                        } else if (isCharging) {
+                            battBar.className = "bg-sky-400 h-full rounded-full transition-all duration-500";
+                        } else {
+                            battBar.className = "bg-emerald-500 h-full rounded-full transition-all duration-500";
+                        }
+
+                        batteryInfo.level = levelPct;
+                        batteryInfo.charging = isCharging;
+                        batteryInfo.chargingTime = battery.chargingTime;
+                        batteryInfo.dischargingTime = battery.dischargingTime;
+                    };
+
+                    updateBattery();
+
+                    // Battery event listeners
+                    battery.addEventListener('levelchange', updateBattery);
+                    battery.addEventListener('chargingchange', updateBattery);
+                } catch (e) {
+                    document.getElementById('stat-battery').innerText = 'Unavailable';
+                    document.getElementById('batt-level').innerText = 'N/A';
+                    document.getElementById('batt-charging').innerHTML = getStatusBadge(false, 'Unavailable');
+                }
+            } else {
+                document.getElementById('stat-battery').innerText = 'API Unsupported';
+                document.getElementById('batt-level').innerText = 'N/A';
+                document.getElementById('batt-charging').innerHTML = getStatusBadge(false, 'API Unsupported');
+                document.getElementById('batt-time').innerText = 'N/A';
+            }
+
+            return {
+                logicalCores: cores,
+                deviceMemoryGB: ram,
+                maxTouchPoints: touchPoints,
+                battery: batteryInfo
+            };
+        }
+
+        // 3. Display & Screen Specs
+        function detectScreen() {
+            const screenRes = `${window.screen.width} x ${window.screen.height}`;
+            const availRes = `${window.screen.availWidth} x ${window.screen.availHeight}`;
+            const viewport = `${window.innerWidth} x ${window.innerHeight}`;
+            const dpr = window.devicePixelRatio || 1;
+            const colorDepth = `${window.screen.colorDepth}-bit`;
+            
+            const orientationType = screen.orientation ? screen.orientation.type : (window.orientation !== undefined ? 'Legacy' : 'N/A');
+            const orientationAngle = screen.orientation ? `${screen.orientation.angle}°` : 'N/A';
+
+            const p3Gamut = window.matchMedia('(color-gamut: p3)').matches;
+            const darkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+            document.getElementById('screen-res').innerText = screenRes;
+            document.getElementById('screen-avail').innerText = availRes;
+            document.getElementById('screen-viewport').innerText = viewport;
+            document.getElementById('screen-dpr').innerText = `${dpr}x`;
+            document.getElementById('screen-color-depth').innerText = colorDepth;
+            document.getElementById('screen-orientation').innerText = `${orientationType} (${orientationAngle})`;
+            document.getElementById('screen-gamut').innerHTML = getStatusBadge(p3Gamut, p3Gamut ? 'Display P3' : 'sRGB');
+            document.getElementById('screen-darkmode').innerHTML = getStatusBadge(darkMode, darkMode ? 'Dark Mode' : 'Light Mode');
+
+            return {
+                resolution: screenRes,
+                availableSpace: availRes,
+                viewport: viewport,
+                devicePixelRatio: dpr,
+                colorDepth: colorDepth,
+                orientation: orientationType,
+                orientationAngle: orientationAngle,
+                p3Gamut: p3Gamut,
+                darkModePref: darkMode
+            };
+        }
+
+        // 4. GPU & WebGL Info
+        function detectGPU() {
+            let webgl1 = false;
+            let webgl2 = false;
+            let vendor = 'Unknown';
+            let renderer = 'Unknown';
+            let maxTexSize = 'N/A';
+            let maxRbSize = 'N/A';
+            let antialias = 'N/A';
+
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    webgl1 = true;
+                    maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) + 'px';
+                    maxRbSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) + 'px';
+                    
+                    const contextAttributes = gl.getContextAttributes();
+                    antialias = contextAttributes ? (contextAttributes.antialias ? 'Supported' : 'Disabled') : 'N/A';
+
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+                        renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                    }
+                }
+
+                const gl2 = canvas.getContext('webgl2');
+                if (gl2) {
+                    webgl2 = true;
+                }
+            } catch (e) {
+                console.error("WebGL Detection error:", e);
+            }
+
+            document.getElementById('gpu-webgl1').innerHTML = getStatusBadge(webgl1);
+            document.getElementById('gpu-webgl2').innerHTML = getStatusBadge(webgl2);
+            document.getElementById('gpu-vendor').innerText = vendor;
+            document.getElementById('gpu-renderer').innerText = renderer;
+            document.getElementById('gpu-max-tex').innerText = maxTexSize;
+            document.getElementById('gpu-max-rb').innerText = maxRbSize;
+            document.getElementById('gpu-aa').innerText = antialias;
+
+            return {
+                webgl1: webgl1,
+                webgl2: webgl2,
+                unmaskedVendor: vendor,
+                unmaskedRenderer: renderer,
+                maxTextureSize: maxTexSize,
+                maxRenderbufferSize: maxRbSize,
+                antialias: antialias
+            };
+        }
+
+        // 5. Network Information & IP Geolocation Lookup
+        async function detectNetwork() {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            let netData = {};
+
+            if (conn) {
+                const ect = conn.effectiveType ? conn.effectiveType.toUpperCase() : 'N/A';
+                const downlink = conn.downlink ? `${conn.downlink} Mbps` : 'N/A';
+                const rtt = conn.rtt ? `${conn.rtt} ms` : 'N/A';
+                const saveData = conn.saveData !== undefined ? (conn.saveData ? 'Enabled' : 'Disabled') : 'N/A';
+
+                document.getElementById('stat-network').innerText = ect;
+                document.getElementById('net-ect').innerText = ect;
+                document.getElementById('net-downlink').innerText = downlink;
+                document.getElementById('net-rtt').innerText = rtt;
+                document.getElementById('net-savedata').innerText = saveData;
+
+                netData = { effectiveType: ect, downlink: downlink, rtt: rtt, saveData: saveData };
+            } else {
+                document.getElementById('stat-network').innerText = 'N/A';
+                document.getElementById('net-ect').innerText = 'API Unsupported';
+                document.getElementById('net-downlink').innerText = 'N/A';
+                document.getElementById('net-rtt').innerText = 'N/A';
+                document.getElementById('net-savedata').innerText = 'N/A';
+            }
+
+            // Fetch IP Information using ipapi.co with fallback to ipify
+            try {
+                const res = await fetch('https://ipapi.co/json/');
+                if (!res.ok) throw new Error("Primary IP API Failed");
+                const ipJson = await res.json();
+
+                document.getElementById('stat-ip').innerText = ipJson.ip || 'Unknown';
+                document.getElementById('net-ip').innerText = ipJson.ip || 'Unknown';
+                document.getElementById('net-isp').innerText = ipJson.org || ipJson.asn || 'N/A';
+                document.getElementById('net-location').innerText = `${ipJson.city || ''}, ${ipJson.region || ''}, ${ipJson.country_name || ''}`;
+
+                netData.ip = ipJson.ip;
+                netData.org = ipJson.org;
+                netData.city = ipJson.city;
+                netData.country = ipJson.country_name;
+            } catch (e) {
+                // Fallback to ipify for IP only if primary fails
+                try {
+                    const fallbackRes = await fetch('https://api.ipify.org?format=json');
+                    const fallbackJson = await fallbackRes.json();
+                    document.getElementById('stat-ip').innerText = fallbackJson.ip;
+                    document.getElementById('net-ip').innerText = fallbackJson.ip;
+                    document.getElementById('net-isp').innerText = 'Location service blocked';
+                    document.getElementById('net-location').innerText = 'Location service blocked';
+                    netData.ip = fallbackJson.ip;
+                } catch (err) {
+                    document.getElementById('stat-ip').innerText = 'Blocked / Offline';
+                    document.getElementById('net-ip').innerText = 'Blocked / Offline';
+                    document.getElementById('net-isp').innerText = 'N/A';
+                    document.getElementById('net-location').innerText = 'N/A';
+                }
+            }
+
+            return netData;
+        }
+
+        // 6. Media Devices Enumeration
+        async function detectMediaDevices() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+                document.getElementById('media-mics').innerText = 'N/A';
+                document.getElementById('media-cams').innerText = 'N/A';
+                document.getElementById('media-speakers').innerText = 'N/A';
+                document.getElementById('media-support').innerHTML = getStatusBadge(false);
+                return { supported: false };
+            }
+
+            document.getElementById('media-support').innerHTML = getStatusBadge(true);
+
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                let mics = 0, cams = 0, speakers = 0;
+
+                devices.forEach(device => {
+                    if (device.kind === 'audioinput') mics++;
+                    if (device.kind === 'videoinput') cams++;
+                    if (device.kind === 'audiooutput') speakers++;
+                });
+
+                document.getElementById('media-mics').innerText = `${mics} Microphone(s)`;
+                document.getElementById('media-cams').innerText = `${cams} Camera(s)`;
+                document.getElementById('media-speakers').innerText = `${speakers} Speaker(s)`;
+
+                return {
+                    supported: true,
+                    microphones: mics,
+                    cameras: cams,
+                    speakers: speakers
+                };
+            } catch (e) {
+                console.error("Media Device Enumeration Error:", e);
+                return { supported: true, error: "Permission Denied or Restricted" };
+            }
+        }
+
+        // Optional permission trigger to get detailed label access
+        async function requestMediaPermissions() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                showToast("Media permissions granted!");
+                // Stop tracks immediately after acquiring permission
+                stream.getTracks().forEach(track => track.stop());
+                detectMediaDevices();
+            } catch (err) {
+                showToast("Media permission denied or unavailable.");
+            }
+        }
+
+        // 7. HTML5 Feature Support Checklist
+        function detectHTML5APIs() {
+            const apis = [
+                { name: 'Geolocation API', check: 'geolocation' in navigator },
+                { name: 'Service Workers', check: 'serviceWorker' in navigator },
+                { name: 'Web Workers', check: typeof(Worker) !== "undefined" },
+                { name: 'WebAssembly (Wasm)', check: typeof WebAssembly === "object" },
+                { name: 'WebSockets', check: 'WebSocket' in window },
+                { name: 'WebRTC', check: 'RTCPeerConnection' in window },
+                { name: 'WebGPU', check: 'gpu' in navigator },
+                { name: 'Web Audio API', check: 'AudioContext' in window || 'webkitAudioContext' in window },
+                { name: 'Speech Recognition', check: 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window },
+                { name: 'Speech Synthesis', check: 'speechSynthesis' in window },
+                { name: 'Web Bluetooth', check: 'bluetooth' in navigator },
+                { name: 'WebUSB', check: 'usb' in navigator },
+                { name: 'Vibration API', check: 'vibrate' in navigator },
+                { name: 'Notifications API', check: 'Notification' in window },
+                { name: 'Gamepad API', check: 'getGamepads' in navigator },
+                { name: 'IndexedDB', check: 'indexedDB' in window },
+                { name: 'LocalStorage', check: (()=>{ try { localStorage.setItem('t','1'); localStorage.removeItem('t'); return true;}catch(e){return false;} })() },
+                { name: 'SessionStorage', check: (()=>{ try { sessionStorage.setItem('t','1'); sessionStorage.removeItem('t'); return true;}catch(e){return false;} })() },
+                { name: 'Clipboard API', check: 'clipboard' in navigator },
+                { name: 'Share API (WebShare)', check: 'share' in navigator },
+                { name: 'Barcode Detector', check: 'BarcodeDetector' in window },
+                { name: 'Screen Capture API', check: 'mediaDevices' in navigator && 'getDisplayMedia' in navigator.mediaDevices },
+                { name: 'Beacon API', check: 'sendBeacon' in navigator },
+                { name: 'Performance Timeline', check: 'performance' in window }
+            ];
+
+            const grid = document.getElementById('api-grid');
+            grid.innerHTML = '';
+            let supportedCount = 0;
+
+            const apiResults = {};
+
+            apis.forEach(api => {
+                apiResults[api.name] = api.check;
+                if (api.check) supportedCount++;
+
+                const card = document.createElement('div');
+                card.className = `p-3 rounded-lg border flex items-center justify-between ${
+                    api.check 
+                    ? 'bg-slate-800/40 border-slate-700/60 text-slate-200' 
+                    : 'bg-slate-900/30 border-slate-800/80 text-slate-500'
+                }`;
+
+                card.innerHTML = `
+                    <span class="truncate pr-2">${api.name}</span>
+                    ${getStatusBadge(api.check)}
+                `;
+                grid.appendChild(card);
+            });
+
+            const percentage = Math.round((supportedCount / apis.length) * 100);
+            document.getElementById('api-score').innerText = `Supported: ${supportedCount} / ${apis.length} (${percentage}%)`;
+
+            return apiResults;
+        }
+
+        // Show toast banner
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = message;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // Export JSON Report
+        function exportJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(diagnosticData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `HTML5_Diagnostics_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast("Diagnostic report downloaded as JSON!");
+        }
+
+        // Master Refresh Trigger
+        async function refreshDiagnostics() {
+            const icon = document.getElementById('refresh-icon');
+            icon.classList.add('fa-spin');
+
+            diagnosticData.timestamp = new Date().toISOString();
+            diagnosticData.browser = detectBrowser();
+            diagnosticData.hardware = await detectHardware();
+            diagnosticData.screen = detectScreen();
+            diagnosticData.gpu = detectGPU();
+            diagnosticData.network = await detectNetwork();
+            diagnosticData.media = await detectMediaDevices();
+            diagnosticData.html5Capabilities = detectHTML5APIs();
+
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+                showToast("Diagnostics updated successfully!");
+            }, 500);
+        }
+
+        // Window Event Listeners
+        window.addEventListener('resize', () => {
+            diagnosticData.screen = detectScreen();
+        });
+
+        // Initialize on DOM Ready
+        window.onload = function() {
+            refreshDiagnostics();
+        };
+    </script>
+</body>
+</html>
